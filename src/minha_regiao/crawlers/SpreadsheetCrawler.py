@@ -1,8 +1,11 @@
 import time
 import requests
+import pandas as pd
 from tqdm import tqdm
+from typing import List
 from bs4 import BeautifulSoup
 from minha_regiao.crawlers.Crawler import Crawler
+from minha_regiao.dto.ElectionFile import ElectionFile
 
 BASE_URL = "https://www.sg.mai.gov.pt/AdministracaoEleitoral/EleicoesReferendos/"
 
@@ -10,27 +13,45 @@ BASE_URL = "https://www.sg.mai.gov.pt/AdministracaoEleitoral/EleicoesReferendos/
 # https://www.sg.mai.gov.pt/AdministracaoEleitoral/EleicoesReferendos/PresidenciaRepublica/Documents/PR_1976.xlsx
 class SpreadsheetCrawler(Crawler):
 
-    def _extract_presidential_elections(self):
+    def _extract_presidential_elections(self) -> List[ElectionFile]:
+
         for year in tqdm(
             range(1974, time.localtime().tm_year + 1),
             desc="Presidential Elections",
             leave=False,
         ):
-            # Verify if exists a link https://www.sg.mai.gov.pt/AdministracaoEleitoral/EleicoesReferendos/PresidenciaRepublica/Documents/PR_1976.xlsx
-            xlsx_file = f"{BASE_URL}/PresidenciaRepublica/Documents/PR_{year}.xlsx"
+            base_file = f"{BASE_URL}PresidenciaRepublica/Documents/PR_{year}"
 
-            reqsponse = requests.head(xlsx_file)
+            for ext in [".xlsx", ".xls"]:
+                file_url = f"{base_file}{ext}"
+                response = requests.get(file_url)
 
-            if reqsponse.status_code == 200:
-                pass
+                # Check if it's actually a file download (not a redirect to HTML page)
+                content_type = response.headers.get("Content-Type", "")
+
+                if (
+                    "application/vnd" in content_type
+                    or "application/octet-stream" in content_type
+                ):
+                    with open(f"temp_presidential_{year}{ext}", "wb") as f:
+                        f.write(response.content)
+
+                    excel_file = pd.ExcelFile(f"temp_presidential_{year}{ext}")
+
+                    for sheet_name in excel_file.sheet_names:
+                        file = ElectionFile(
+                            url=file_url,
+                            year=year,
+                            election_type="presidential",
+                        )
+                    break
             else:
-                # Try with .xls extension
-                xls_file = f"{BASE_URL}/PresidenciaRepublica/Documents/PR_{year}.xls"
+                print(f"No spreadsheet found for presidential election in {year}")
+                continue
 
-                if not requests.head(xls_file).status_code == 200:
-                    raise ValueError(
-                        f"Could not find presidential election data for year {year}"
-                    )
+            # print(df.head())
+
+        raise NotImplementedError("Subclasses must implement this method")
 
     def _extract_municipal_elections(self):
         pass
