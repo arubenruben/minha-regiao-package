@@ -1,0 +1,32 @@
+[build-system]
+
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+["project"]
+name = "minha_regiao"
+dynamic = ["version"] 
+description = "Python Package that supports the Minha Região Platform"
+readme = "README.md"
+
+authors = [
+    {name = "Rúben Almeida", email = "ruben.f.almeida@inesctec.pt"}
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    
+]
+
+[project.optional-dependencies]
+
+dev = [
+    
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["propostas_civil", "propostas_civil.*"]
+namespaces = false
+
+[tool.setuptools_scm]

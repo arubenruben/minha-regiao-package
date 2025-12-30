@@ -1,2 +1,0 @@
-class SpreadsheetCrawler:
-    pass
