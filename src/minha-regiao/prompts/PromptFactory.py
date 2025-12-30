@@ -1,0 +1,2 @@
+class PromptFactory:
+    pass
