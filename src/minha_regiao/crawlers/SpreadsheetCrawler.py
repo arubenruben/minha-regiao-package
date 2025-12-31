@@ -56,7 +56,6 @@ class SpreadsheetCrawler(Crawler):
 
                 unique_round_election_file = ElectionFile.from_url(
                     url=file_url,
-                    file_format=ext.lstrip("."),
                 )
 
                 election = PresidentialElection(
@@ -100,9 +99,7 @@ class SpreadsheetCrawler(Crawler):
                 ):
                     file_cm = ElectionFile.from_url(
                         url=url,
-                        file_format=ext.lstrip("."),
                     )
-                    file_url_cm = url
                     break
 
             # Find AM file
@@ -117,7 +114,6 @@ class SpreadsheetCrawler(Crawler):
                 ):
                     file_am = ElectionFile.from_url(
                         url=url,
-                        file_format=ext.lstrip("."),
                     )
                     break
 
@@ -133,7 +129,6 @@ class SpreadsheetCrawler(Crawler):
                 ):
                     file_af = ElectionFile.from_url(
                         url=url,
-                        file_format=ext.lstrip("."),
                     )
                     break
 
