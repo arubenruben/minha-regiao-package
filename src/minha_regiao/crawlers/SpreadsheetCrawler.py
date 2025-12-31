@@ -48,9 +48,6 @@ class SpreadsheetCrawler(Crawler):
                 ):
                     continue
 
-                with open(f"temp_presidential_{year}{ext}", "wb") as f:
-                    f.write(response.content)
-
                 file = ElectionFile.from_url(
                     url=file_url,
                     year=year,
@@ -147,7 +144,7 @@ class SpreadsheetCrawler(Crawler):
         for file in tqdm(files, desc="Transforming Election Files", leave=False):
             with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
                 df = file.get_df()
-                df.to_excel(tmp_file.name, index=False)
+                df.to_excel(tmp_file, index=False)
 
                 parsed_file = ElectionFile(
                     url=file.url,
