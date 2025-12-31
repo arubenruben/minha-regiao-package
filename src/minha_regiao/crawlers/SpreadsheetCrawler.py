@@ -7,8 +7,8 @@ from environs import Env
 from bs4 import BeautifulSoup
 from huggingface_hub import login
 from minha_regiao.crawlers.Crawler import Crawler
-from huggingface_hub import file_exists, upload_file
 from minha_regiao.dto.ElectionFile import ElectionFile
+from huggingface_hub import file_exists, upload_file, repo_exists, create_repo
 
 
 class SpreadsheetCrawler(Crawler):
@@ -159,6 +159,15 @@ class SpreadsheetCrawler(Crawler):
 
     # Add Files to HF Hub if not already present
     def load(self, files: List[ElectionFile]) -> None:
+        # Verify if the repo exists and create it if not
+        if not repo_exists(self.hf_repo_name, repo_type="dataset"):
+            create_repo(
+                repo_id=self.hf_repo_name,
+                repo_type="dataset",
+                private=False,
+                exist_ok=True,
+            )
+
         for file in tqdm(files, desc="Loading Election Files to HF Hub", leave=False):
 
             filename = f"elections/{file.election_type}_{file.year}.{file.file_format}"
