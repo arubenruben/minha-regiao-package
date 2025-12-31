@@ -6,9 +6,12 @@ from typing import List
 from environs import Env
 from bs4 import BeautifulSoup
 from huggingface_hub import login
+from minha_regiao.dto.Election import Election
 from minha_regiao.crawlers.Crawler import Crawler
 from minha_regiao.dto.ElectionFile import ElectionFile
 from huggingface_hub import file_exists, upload_file, repo_exists, create_repo
+from minha_regiao.dto.elections.PresidentialElection import PresidentialElection
+from minha_regiao.dto.elections.MunicipalityElection import MunicipalityElection
 
 
 class SpreadsheetCrawler(Crawler):
@@ -22,9 +25,9 @@ class SpreadsheetCrawler(Crawler):
 
         login(self.hf_api_key)
 
-    def _extract_presidential_elections(self) -> List[ElectionFile]:
+    def _extract_presidential_elections(self) -> List[PresidentialElection]:
 
-        files = []
+        presidential_elections = []
 
         for year in tqdm(
             range(1974, time.localtime().tm_year + 1),
@@ -48,32 +51,115 @@ class SpreadsheetCrawler(Crawler):
                 ):
                     continue
 
-                file = ElectionFile.from_url(
+                # TODO: Introduce logic for first and second round files
+                # Currently only single round elections are handled
+
+                unique_round_election_file = ElectionFile.from_url(
                     url=file_url,
-                    year=year,
-                    election_type="presidential",
                     file_format=ext.lstrip("."),
                 )
 
-                files.append(file)
+                election = PresidentialElection(
+                    year=year, url=file_url, first_round_file=unique_round_election_file
+                )
+
+                presidential_elections.append(election)
 
                 break
             else:
                 print(f"No spreadsheet found for presidential election in {year}")
                 continue
 
-        if not files:
-            raise ValueError("No presidential election files were found.")
+        if not presidential_elections:
+            raise ValueError("No presidential elections found.")
 
-        return files
+        return presidential_elections
 
-    def _extract_municipal_elections(self):
-        pass
+    def _extract_municipal_elections(self) -> List[MunicipalityElection]:
+        municipality_elections = []
+
+        for year in range(1976, time.localtime().tm_year + 1):
+            base_file_cm = f"{self.base_url}AutarquiasLocais/Documents/Autarquicas-{year}/resultados_eleicoes_CM_{year}"
+            base_file_am = f"{self.base_url}AutarquiasLocais/Documents/Autarquicas-{year}/resultados_eleicoes_AM_{year}"
+            base_file_af = f"{self.base_url}AutarquiasLocais/Documents/Autarquicas-{year}/resultados_eleicoes_AF_{year}"
+
+            # Try to find each file independently with its own extension
+            file_cm = None
+            file_am = None
+            file_af = None
+
+            # Find CM file
+            for ext in [".xlsx", ".xls"]:
+                url = f"{base_file_cm}{ext}"
+                response = requests.get(url)
+                content_type = response.headers.get("Content-Type", "")
+
+                if response.status_code == 200 and (
+                    "application/vnd" in content_type
+                    or "application/octet-stream" in content_type
+                ):
+                    file_cm = ElectionFile.from_url(
+                        url=url,
+                        file_format=ext.lstrip("."),
+                    )
+                    file_url_cm = url
+                    break
+
+            # Find AM file
+            for ext in [".xlsx", ".xls"]:
+                url = f"{base_file_am}{ext}"
+                response = requests.get(url)
+                content_type = response.headers.get("Content-Type", "")
+
+                if response.status_code == 200 and (
+                    "application/vnd" in content_type
+                    or "application/octet-stream" in content_type
+                ):
+                    file_am = ElectionFile.from_url(
+                        url=url,
+                        file_format=ext.lstrip("."),
+                    )
+                    break
+
+            # Find AF file
+            for ext in [".xlsx", ".xls"]:
+                url = f"{base_file_af}{ext}"
+                response = requests.get(url)
+                content_type = response.headers.get("Content-Type", "")
+
+                if response.status_code == 200 and (
+                    "application/vnd" in content_type
+                    or "application/octet-stream" in content_type
+                ):
+                    file_af = ElectionFile.from_url(
+                        url=url,
+                        file_format=ext.lstrip("."),
+                    )
+                    break
+
+            # Check if all three files were found
+            if not file_cm or not file_am or not file_af:
+                print(
+                    f"No complete set of spreadsheets found for municipal election in {year}"
+                )
+                continue
+
+            municipality_elections.append(
+                MunicipalityElection(
+                    year=year,
+                    url="",
+                    municipal_assembly_file=file_am,
+                    parish_assembly_file=file_af,
+                    town_hall_file=file_cm,
+                )
+            )
+
+        return municipality_elections
 
     def _extract_parliamentary_elections(self):
         pass
 
-    def extract(self):
+    def extract(self) -> List[Election]:
         soup = BeautifulSoup(
             requests.get(f"{self.base_url}/Paginas/default.aspx").content,
             features="html.parser",
@@ -137,28 +223,11 @@ class SpreadsheetCrawler(Crawler):
 
         return presidential_elections
 
-    def transform(self, files: List[ElectionFile]) -> List[ElectionFile]:
-        # Convert the files from xls to xlsx if needed.
-        parsed_files = []
-
-        for file in tqdm(files, desc="Transforming Election Files", leave=False):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
-                df = file.get_df()
-                df.to_excel(tmp_file, index=False)
-
-                parsed_file = ElectionFile(
-                    url=file.url,
-                    year=file.year,
-                    election_type=file.election_type,
-                    filepath=tmp_file.name,
-                    file_format="xlsx",
-                )
-                parsed_files.append(parsed_file)
-
-        return parsed_files
+    def transform(self, elections: List[Election]) -> List[Election]:
+        return elections
 
     # Add Files to HF Hub if not already present
-    def load(self, files: List[ElectionFile]) -> None:
+    def load(self, elections: List[Election]) -> None:
         # Verify if the repo exists and create it if not
         if not repo_exists(self.hf_repo_name, repo_type="dataset"):
             create_repo(
@@ -168,27 +237,34 @@ class SpreadsheetCrawler(Crawler):
                 exist_ok=True,
             )
 
-        for file in tqdm(files, desc="Loading Election Files to HF Hub", leave=False):
+        for election in tqdm(
+            elections, desc="Loading Election Files to HF Hub", leave=False
+        ):
+            for file in election.get_election_files():
+                if not file.hf_file_id:
+                    raise ValueError(
+                        f"hf_file_id is not set for file in election {election.__class__.__name__} for year {election.year}"
+                    )
 
-            filename = f"elections/{file.election_type}_{file.year}.{file.file_format}"
+                if file_exists(
+                    filename=file.hf_file_id,
+                    repo_id=self.hf_repo_name,
+                    repo_type="dataset",
+                ):
+                    print(
+                        f"File {file.hf_file_id} already exists in the repository. Skipping upload."
+                    )
+                    continue
 
-            if file_exists(
-                filename=filename, repo_id=self.hf_repo_name, repo_type="dataset"
-            ):
-                print(
-                    f"File {filename} already exists in the repository. Skipping upload."
+                upload_file(
+                    path_or_fileobj=file.filepath,
+                    path_in_repo=file.hf_file_id,
+                    repo_id=self.hf_repo_name,
+                    repo_type="dataset",
+                    commit_message=f"Add {file.hf_file_id} election data for {election.year}",
                 )
-                continue
 
-            upload_file(
-                path_or_fileobj=file.filepath,
-                path_in_repo=filename,
-                repo_id=self.hf_repo_name,
-                repo_type="dataset",
-                commit_message=f"Add {file.election_type} election data for {file.year}",
-            )
-
-            print(f"Uploaded {filename} to HF Hub.")
+                print(f"Uploaded {file.hf_file_id} to HF Hub.")
 
 
 if __name__ == "__main__":
@@ -201,6 +277,6 @@ if __name__ == "__main__":
         hf_repo_name=env.str("HF_FILE_REPO"),
     )
 
-    files = crawler.extract()
-    files = crawler.transform(files)
-    crawler.load(files)
+    elections = crawler.extract()
+    transformed_elections = crawler.transform(elections)
+    crawler.load(transformed_elections)
