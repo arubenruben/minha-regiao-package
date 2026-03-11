@@ -1,12 +1,14 @@
 import requests
+from typing import List
 from google import genai
 from bs4 import BeautifulSoup
 from instructor import from_genai
 from prefect import flow, task, cache_policies
 from minha_regiao.flows.file_fetching.Settings import Settings
-from minha_regiao.flows.file_fetching.schema.Elections import Elections
+from minha_regiao.flows.file_fetching.schema.Election import Election
 from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
 from minha_regiao.exceptions.FileFetchingException import FileFetchingException
+from minha_regiao.flows.file_fetching.schema.ElectionHistory import ElectionHistory
 from minha_regiao.flows.file_fetching.prompts.TableHistoryPrompt import TableHistoryPrompt
 
 
@@ -25,10 +27,8 @@ def get_historical_elections_table(url: str):
     
     return table
 
-
-
 @task(name="Extract Election Data from Table", cache_policy=cache_policies.INPUTS)
-def extract_election_data_from_table(table) -> Elections:
+def extract_election_data_from_table(table) -> List[ElectionHistory]:
     client = from_genai(
         genai.Client(
             api_key=settings.gemini_api_key,
@@ -43,16 +43,17 @@ def extract_election_data_from_table(table) -> Elections:
     for tag in table.find_all(True):
         tag.attrs = {}
     
-    return client.create(
+    elections = client.create(
         model=settings.gemini_model,
         messages=TableHistoryPrompt.prompt(normalize_instructor=True, raw_html=str(table)),
-        response_model=Elections,
+        response_model=List[Election],
     )
 
+    return ElectionHistory.from_elections(elections)
+
+
 @flow(name="Parse Election Historical")
-def parse_election_historical(seg_mai_root: SegMaiRoot):
+def parse_election_historical(seg_mai_root: SegMaiRoot) -> List[ElectionHistory]:
     table = get_historical_elections_table(seg_mai_root.historical_elections_url)
     
-    elections = extract_election_data_from_table(table)
-
-    #TODO: Introduce this information into a database or a file for later use in the application
+    return extract_election_data_from_table(table)
