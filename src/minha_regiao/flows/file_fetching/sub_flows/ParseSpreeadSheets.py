@@ -144,7 +144,35 @@ def fetch_municipal_elections_files(
         raise ValueError(f"Number of valid anchor tags ({len(anchor_tags)}) does not match number of election dates ({3 * len(election_history.election_date)}) for legislative elections.")
 
     for date, election in zip(election_history.election_date, election_history.elections):
-        pass
+        anchor_tag_cm = next((a for a in anchor_tags if f"CM" in a['href'] and f"{date.year}" in a['href']), None)
+        anchor_tag_am = next((a for a in anchor_tags if f"AM" in a['href'] and f"{date.year}" in a['href']), None)
+        anchor_tag_af = next((a for a in anchor_tags if f"AF" in a['href'] and f"{date.year}" in a['href']), None)
+        
+        if anchor_tag_cm is None:
+            raise ValueError(f"No valid anchor tag found for Câmara Municipal in year {date.year}.")
+
+        if anchor_tag_am is None:
+            raise ValueError(f"No valid anchor tag found for Assembleia Municipal in year {date.year}.")
+        
+        if anchor_tag_af is None:
+            raise ValueError(f"No valid anchor tag found for Assembleia de Freguesia in year {date.year}.")
+        
+        results.append(ElectionFile(
+            election=election,
+            file_url="https://www.sg.mai.gov.pt" + anchor_tag_cm['href']
+        ))
+        
+        results.append(ElectionFile(
+            election=election,
+            file_url="https://www.sg.mai.gov.pt" + anchor_tag_am['href']
+        ))
+        
+        results.append(ElectionFile(
+            election=election,
+            file_url="https://www.sg.mai.gov.pt" + anchor_tag_af['href']
+        ))
+
+    return results
 
 @task(name="Fetch European Parliament Elections Files")
 def fetch_european_parliament_elections_files(
@@ -153,6 +181,9 @@ def fetch_european_parliament_elections_files(
     results = []
 
     for date, election in zip(election_history.election_date, election_history.elections):
+
+        anchor_tag = next((a for a in soup.find_all('a', href=True) if f"{date.year}" in a['href'] and ("CM" in a['href'] or "AM" in a['href'] or "AF" in a['href'])), None)
+        
         pass
 
     return results
