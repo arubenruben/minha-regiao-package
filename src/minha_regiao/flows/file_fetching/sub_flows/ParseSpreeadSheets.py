@@ -1,3 +1,4 @@
+import re
 import requests
 from typing import List
 from bs4 import BeautifulSoup
@@ -90,6 +91,29 @@ def fetch_legislative_elections_files(
     base_url: str, election_history: ElectionHistory
 )-> List[ElectionFile]:
     results = []
+    
+    response = requests.get(base_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Fetch all elements with "Folha de Cálculo" in the text of the href
+    anchor_tags = soup.find_all('a', string=lambda text: text and "Folha de Cálculo" in text)
+    #TODO: Deal with the votes in the diaspora that are in a different file and have a different naming convention only in the 2005 elections.
+    anchor_tag_2005 = soup.find_all('a', href=lambda href: href and re.search(r'/AR2005_Nacional\.xls', href))
+    anchor_tags_prior_2002 = soup.find_all('a', href=lambda href: href and re.search(r'/AR\d{4}.xls', href))
+    
+    valid_anchor_tags = anchor_tags + anchor_tag_2005 + anchor_tags_prior_2002  
+
+    # Remove duplicates hrefs from valid_anchor_tags
+    seen_hrefs = set()
+    unique_valid_anchor_tags = []
+    
+    for a in valid_anchor_tags:
+        if a['href'] not in seen_hrefs:
+            unique_valid_anchor_tags.append(a)
+            seen_hrefs.add(a['href'])
+
+    if len(unique_valid_anchor_tags) != len(election_history.election_date):
+        raise ValueError(f"Number of valid anchor tags ({len(unique_valid_anchor_tags)}) does not match number of election dates ({len(election_history.election_date)}) for legislative elections.")
 
     for date, election in zip(election_history.election_date, election_history.elections):
         pass
@@ -101,11 +125,26 @@ def fetch_municipal_elections_files(
     base_url: str, election_history: ElectionHistory
 )-> List[ElectionFile]:
     results = []
+    
+    response = requests.get(base_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Fetch all anchor tags that contain "Assembleia de Freguesia" or "Assembleia Municipal" or "Câmara Municipal" in the text
+    # Use get_text() to handle nested tags like <strong> and normalize whitespace to handle &nbsp; and zero-width spaces
+    all_anchors = soup.find_all('a')
+    anchor_tags = [
+        a for a in all_anchors 
+        if a.get_text(strip=True) and any(
+            keyword in a.get_text(strip=True).replace('\xa0', ' ').replace('&nbsp;', ' ').replace('\u200b', '').replace('\u200c', '').replace('\u200d', '')
+            for keyword in ["Assembleia de Freguesia", "Assembleia Municipal", "Câmara Municipal"]
+        )
+    ]
+
+    if len(anchor_tags) != 3 * len(election_history.election_date):
+        raise ValueError(f"Number of valid anchor tags ({len(anchor_tags)}) does not match number of election dates ({3 * len(election_history.election_date)}) for legislative elections.")
 
     for date, election in zip(election_history.election_date, election_history.elections):
         pass
-
-    return results
 
 @task(name="Fetch European Parliament Elections Files")
 def fetch_european_parliament_elections_files(
@@ -171,11 +210,11 @@ def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[
             )
         elif election_history.election_type == 'AL':
             results['AL'].extend(
-                fetch_legislative_elections_files(seg_mai_root.legislative_elections_url, election_history)
+                fetch_municipal_elections_files(seg_mai_root.local_elections_url, election_history)
             )
         elif election_history.election_type == 'AR':
             results['AR'].extend(
-                fetch_municipal_elections_files(seg_mai_root.local_elections_url, election_history)
+                fetch_legislative_elections_files(seg_mai_root.legislative_elections_url, election_history)
             )
         elif election_history.election_type == 'PE':
             results['PE'].extend(
