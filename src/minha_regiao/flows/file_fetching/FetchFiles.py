@@ -87,10 +87,7 @@ def get_root_file_links(url: str = settings.sg_mai_link):
 def save_files_to_hf_repo(election_files: List[ElectionFile]):
     logger = get_run_logger()
     logger.info(f"Starting upload of {len(election_files)} election files to Hugging Face repo")
-    #TODO: Push raw files as git
-
-
-
+    
     for election_file in election_files:
         # Download the files to a temporary location, push to Hugging Face repo using the API, and then delete the temporary files.
         logger.debug(f"Downloading file from {election_file.file_url}")
