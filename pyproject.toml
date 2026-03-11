@@ -12,16 +12,36 @@ readme = "README.md"
 authors = [
     {name = "Rúben Almeida", email = "ruben.f.almeida@inesctec.pt"}
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 
 dependencies = [
-    "pyspark>=4.1.0",
+    "prefect>=3.6.21",
+    "requests",
+    "pandas",
+    "beautifulsoup4",
+    "pydantic",
+    "environs",
+    "python-dotenv",
+    "pydantic-settings",
 ]
 
 [project.optional-dependencies]
 
+langchain = [
+    "langchain>=1.2.11"
+]
+
+ollama = [
+    "ollama>=0.6.1"
+]
+
+hugginface = [
+    "huggingface_hub",
+]
+
+
 dev = [
-    
+    "minha_regiao[ollama, hugginface, langchain]
 ]
 
 [tool.setuptools.packages.find]

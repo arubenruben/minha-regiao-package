@@ -1,0 +1,2 @@
+class FileFetchingException(Exception):
+    pass
