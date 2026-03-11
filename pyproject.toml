@@ -44,6 +44,7 @@
 
     hugginface = [
         "huggingface_hub",
+        "datasets"
     ]
 
     dev = [

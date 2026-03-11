@@ -16,3 +16,6 @@ class Settings(BaseSettings):
     
     gemini_api_key: str
     gemini_model: str
+
+    hf_api_key: str
+    hf_repo_name: str

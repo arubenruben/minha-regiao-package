@@ -1,8 +1,12 @@
 import re
 import requests
+import requests
 from typing import List
+from datasets import Dataset
 from bs4 import BeautifulSoup
 from prefect import flow, task
+from tempfile import NamedTemporaryFile
+from huggingface_hub import login, file_exists, upload_file
 from minha_regiao.flows.file_fetching.Settings import Settings
 from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
 from minha_regiao.flows.file_fetching.schema.ElectionFile import ElectionFile
@@ -14,7 +18,7 @@ settings = Settings()
 
 @task(name="Login to Hugging Face")
 def login_to_hf():
-    pass
+    login(token=settings.hf_api_key)
 
 @task(name="Get Root File Links")
 def get_root_file_links(url: str = settings.sg_mai_link):
@@ -77,12 +81,46 @@ def get_root_file_links(url: str = settings.sg_mai_link):
 def save_files_to_hf_repo(election_files: List[ElectionFile]):
     #TODO: Push raw files as git
 
-    #TODO: Create huggingface datasets with URL pointing to the raw files in the repo
+
+
+    for election_file in election_files:
+        # Download the files to a temporary location, push to Hugging Face repo using the API, and then delete the temporary files.
+        downloaded_file = requests.get(election_file.file_url)
+
+        with NamedTemporaryFile(delete=False) as tmp_file:
+            tmp_file.write(downloaded_file.content)
+            tmp_file.flush()
+
+            path = f"elections/{election_file.election.election_name}/{election_file.file_url.replace('https://www.sg.mai.gov.pt/AdministracaoEleitoral/', '')}"
+
+            if not file_exists(filename=path, repo_id=settings.hf_repo_name):
+                upload_file(
+                    path_or_fileobj=tmp_file.name,
+                    path_in_repo=path,
+                    repo_id=settings.hf_repo_name,
+                    repo_type="dataset",                    
+                    commit_message=f"Add {election_file.election.election_type} election file from {election_file.election.election_date}"
+                )
+            else:
+                print(f"File for {election_file.election.election_type} election from {election_file.election.election_date} already exists in the repo. Skipping upload.")
+
+            # Update the file URL to point to the raw file in the Hugging Face repo
+            election_file.hf_file_url = f"https://huggingface.co/datasets/{settings.hf_repo_name}/resolve/main/{path}"
+
+    dataset = Dataset.from_list([{
+        "election_type": election_file.election.election_type,
+        "election_name": election_file.election.election_name,
+        "election_date": election_file.election.election_date,
+        "file_url": election_file.hf_file_url,
+        "hf_file_url": election_file.hf_file_url
+    } for election_file in election_files])
     
-    pass
+    dataset.push_to_hub(settings.hf_repo_name, private=False, config_name="election_files_metadata")
 
 @flow(name="Fetch Files")
 def fetch_files():
+    login_to_hf()
+
     seg_mai_root = get_root_file_links()
 
     elections_history = parse_election_historical(seg_mai_root)

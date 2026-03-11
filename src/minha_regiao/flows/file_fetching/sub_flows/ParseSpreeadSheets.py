@@ -111,12 +111,26 @@ def fetch_legislative_elections_files(
         if a['href'] not in seen_hrefs:
             unique_valid_anchor_tags.append(a)
             seen_hrefs.add(a['href'])
+    
+    # Remove any anchor tag with "VOT_RESID_ESTRANG" in the href as well, as they contain the votes from the diaspora
+    unique_valid_anchor_tags = [a for a in unique_valid_anchor_tags if "VOT_RESID_ESTRANG" not in a['href']]
 
     if len(unique_valid_anchor_tags) != len(election_history.election_date):
         raise ValueError(f"Number of valid anchor tags ({len(unique_valid_anchor_tags)}) does not match number of election dates ({len(election_history.election_date)}) for legislative elections.")
 
     for date, election in zip(election_history.election_date, election_history.elections):
-        pass
+        # Find anchor tag with year in the href
+        anchor_tag = next((a for a in unique_valid_anchor_tags if f"{date.year}" in a['href']), None)
+        
+        if anchor_tag is None:
+            raise ValueError(f"No valid anchor tag found for legislative election in year {date.year}.")
+
+        file_url = "https://www.sg.mai.gov.pt" + anchor_tag['href']
+        
+        results.append(ElectionFile(
+            election=election,
+            file_url=file_url
+        ))
 
     return results
 
@@ -179,12 +193,46 @@ def fetch_european_parliament_elections_files(
     base_url: str, election_history: ElectionHistory
 )-> List[ElectionFile]:
     results = []
+    
+    response = requests.get(base_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Fetch the anchor tags that contain "Folha de Cálculo" in the text of the href
+    anchor_tags = soup.find_all('a', string=lambda text: text and "Folha de Cálculo" in text)
+    
+    anchor_tags += soup.find_all('a', string=lambda text: text and "Ficheiro de Resultados do Escrutínio Provisório" in text.replace('\xa0', ' ').replace('&nbsp;', ' ').replace('\u200b', '').replace('\u200c', '').replace('\u200d', ''))
+
+    anchor_tags += soup.find_all('a', href=lambda href: href and re.search(r'/PE\d{2}\.zip', href))
+    
+    # Remove duplicates hrefs from anchor_tags
+    seen_hrefs = set()
+    unique_anchor_tags = []
+    for a in anchor_tags:
+         if a['href'] not in seen_hrefs:
+             unique_anchor_tags.append(a)
+             seen_hrefs.add(a['href'])
+
+    # Remove any anchor tag with "Estrangeiro" in the href as well, as they contain the votes from the diaspora
+    unique_anchor_tags = [a for a in unique_anchor_tags if "Estrangeiro" not in a['href'] and "VOT_RESID_ESTRANG" not in a['href']]
+
+    if len(unique_anchor_tags) != len(election_history.election_date):
+        raise ValueError(f"Number of valid anchor tags ({len(unique_anchor_tags)}) does not match number of election dates ({len(election_history.election_date)}) for European Parliament elections.")
 
     for date, election in zip(election_history.election_date, election_history.elections):
 
-        anchor_tag = next((a for a in soup.find_all('a', href=True) if f"{date.year}" in a['href'] and ("CM" in a['href'] or "AM" in a['href'] or "AF" in a['href'])), None)
+        anchor_tag = next((a for a in soup.find_all('a', href=True) if f"{date.year}" in a['href']), None)
+
+        if not anchor_tag:
+            # Search for PEYY.zip in the href
+            anchor_tag = next((a for a in soup.find_all('a', href=True) if re.search(rf'/PE{str(date.year)[-2:]}\.zip', a['href'])), None) 
         
-        pass
+        if anchor_tag is None:
+            raise ValueError(f"No valid anchor tag found for European Parliament election in year {date.year}.")
+        
+        results.append(ElectionFile(
+            election=election,
+            file_url="https://www.sg.mai.gov.pt" + anchor_tag['href']
+        ))
 
     return results
 
@@ -192,34 +240,19 @@ def fetch_european_parliament_elections_files(
 def fetch_regional_elections_files(
     base_url: str, election_history: ElectionHistory
 )-> List[ElectionFile]:
-    results = []
-
-    for date, election in zip(election_history.election_date, election_history.elections):
-        pass
-
-    return results
+    raise NotImplementedError("Regional elections files fetching not implemented yet.")
 
 @task(name="Fetch Referendums Files")
 def fetch_referendums_files(
     base_url: str, election_history: ElectionHistory
 )-> List[ElectionFile]:
-    results = []
-    
-    for date, election in zip(election_history.election_date, election_history.elections):
-        pass
-
-    return results
+    raise NotImplementedError("Referendums files fetching not implemented yet.")
 
 @task(name="Fetch Constitutional Assembly Files")
 def fetch_constitutional_assembly_files(
     base_url: str, election_history: ElectionHistory
 )-> List[ElectionFile]:
-    results = []
-
-    for date, election in zip(election_history.election_date, election_history.elections):
-        pass
-
-    return results    
+    raise NotImplementedError("Constitutional Assembly elections files fetching not implemented yet.")   
 
 @flow(name="Fetch Spreadsheet Files")
 def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[ElectionHistory]) -> List[ElectionFile]:
@@ -228,10 +261,10 @@ def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[
         'AL': [],
         'AR': [],
         'PE': [],
-        'ALRAM': [],
-        'ALRAA': [],
-        'REF': [],
-        'AC': []
+        #'ALRAM': [],
+        #'ALRAA': [],
+        #'REF': [],
+        #'AC': []
     }
     
     for election_history in elections_histories:
@@ -252,17 +285,20 @@ def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[
                 fetch_european_parliament_elections_files(seg_mai_root.european_parliament_elections_url, election_history)
             )
         elif election_history.election_type in ['ALRAM', 'ALRAA']:
-            results['ALRAM'].extend(
-                fetch_regional_elections_files(seg_mai_root.regional_elections_url, election_history)
-            )
+            # results['ALRAM'].extend(
+            #     fetch_regional_elections_files(seg_mai_root.regional_elections_url, election_history)
+            # )
+            pass
         elif election_history.election_type in ['REF']:
-            results['REF'].extend(
-                fetch_referendums_files(seg_mai_root.referendums_url, election_history)
-            )
+            # results['REF'].extend(
+            #     fetch_referendums_files(seg_mai_root.referendums_url, election_history)
+            # )
+            pass
         elif election_history.election_type in ['AC']:
-            results['AC'].extend(
-                fetch_constitutional_assembly_files(seg_mai_root.historical_elections_url, election_history)
-            )
+            # results['AC'].extend(
+            #     fetch_constitutional_assembly_files(seg_mai_root.historical_elections_url, election_history)
+            # )
+            pass
         else:
             raise ValueError(f"Unknown election type: {election_history.election_type}")
         
@@ -270,7 +306,28 @@ def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[
     for key, value in results.items():
         if not value:
             raise FileFetchingException(f"No files found for {key} and election history {election_history.election_name} ({election_history.election_type})")
+        
+        # Introducing check for presidential elections that have two turns would require a more complex logic to match the files with the correct election history, so for now we will skip this check for presidential elections        
+        if key == "PR":
+            continue 
 
-    #TODO: Ensure the number of files is equal to the number of dates in the election history.
+        election_entry = next((election for election in elections_histories if election.election_type == key), None)
+        
+        if election_entry is None:
+            raise ValueError(f"No election entry found for election type {key}")
+        
+        if key == "AL":
+            # For local elections we have 3 files per election (CM, AM and AF), so we need to check that the number of files is 3 times the number of elections in the election history
+            if len(value) != 3 * len(election_entry.elections):
+                raise FileFetchingException(f"Number of files found for {key} does not match number of elections in the election history. Found {len(value)} files but expected {3 * len(election_entry.elections)} for election history {election_entry.election_name} ({election_entry.election_type})")
+        else:
+            if len(value) != len(election_entry.elections):
+                raise FileFetchingException(f"Number of files found for {key} does not match number of elections in the election history. Found {len(value)} files but expected {len(election_entry.elections)} for election history {election_entry.election_name} ({election_entry.election_type})")
+        
+    # If all checks pass, flatten the results and return
+    flattened_results = []
+    
+    for key, value in results.items():
+        flattened_results.extend(value)
 
-    return results.values()
+    return flattened_results
