@@ -1,14 +1,20 @@
 import re
 import requests
+from typing import List
 from bs4 import BeautifulSoup
 from prefect import flow, task
 from minha_regiao.flows.file_fetching.Settings import Settings
 from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
+from minha_regiao.flows.file_fetching.schema.ElectionFile import ElectionFile
 from minha_regiao.exceptions.FileFetchingException import FileFetchingException
 from minha_regiao.flows.file_fetching.sub_flows.ParseSpreeadSheets import fetch_spreadsheet_files
 from minha_regiao.flows.file_fetching.sub_flows.ParseElectionHistorical import parse_election_historical
 
 settings = Settings()
+
+@task(name="Login to Hugging Face")
+def login_to_hf():
+    pass
 
 @task(name="Get Root File Links")
 def get_root_file_links(url: str = settings.sg_mai_link):
@@ -67,15 +73,25 @@ def get_root_file_links(url: str = settings.sg_mai_link):
         mid_term_municipal_elections_url=next_pages['Autárquicas Intercalares']
     )
 
+@task(name="Save Files to Hugging Face Repo")
+def save_files_to_hf_repo(election_files: List[ElectionFile]):
+    #TODO: Push raw files as git
+
+    #TODO: Create huggingface datasets with URL pointing to the raw files in the repo
+    
+    pass
+
 @flow(name="Fetch Files")
 def fetch_files():
     seg_mai_root = get_root_file_links()
 
-    elections = parse_election_historical(seg_mai_root)
+    elections_history = parse_election_historical(seg_mai_root)
 
     #TODO: Save to database the elections. Define the ORM / sqlmodel / migration for that 
     
-    fetch_spreadsheet_files(seg_mai_root, elections)
+    election_files = fetch_spreadsheet_files(seg_mai_root, elections_history)
+
+    save_files_to_hf_repo(election_files)
 
 if __name__ == "__main__":
     fetch_files()

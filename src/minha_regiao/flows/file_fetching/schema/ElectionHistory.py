@@ -1,5 +1,5 @@
-from typing import List, Literal
 from datetime import date
+from typing import List, Literal
 from minha_regiao.flows.file_fetching.schema.Schema import Schema
 from minha_regiao.flows.file_fetching.schema.Election import Election
 
