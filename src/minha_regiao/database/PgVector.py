@@ -1,0 +1,2 @@
+class PgVector:
+    pass

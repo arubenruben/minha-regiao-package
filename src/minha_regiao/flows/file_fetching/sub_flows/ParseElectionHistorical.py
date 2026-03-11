@@ -1,11 +1,14 @@
 import requests
-import instructor
+from google import genai
 from bs4 import BeautifulSoup
-from prefect import flow, task
+from instructor import from_genai
+from prefect import flow, task, cache_policies
 from minha_regiao.flows.file_fetching.Settings import Settings
 from minha_regiao.flows.file_fetching.schema.Elections import Elections
 from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
 from minha_regiao.exceptions.FileFetchingException import FileFetchingException
+from minha_regiao.flows.file_fetching.prompts.TableHistoryPrompt import TableHistoryPrompt
+
 
 settings = Settings()
 
@@ -22,13 +25,29 @@ def get_historical_elections_table(url: str):
     
     return table
 
-@task(name="Extract Election Data from Table")
-def extract_election_data_from_table(table) -> Elections:
-    client = instructor.from_provider(
-        model=settings.ollama_model
-    )
-    raise NotImplementedError("This function is not yet implemented. It should parse the HTML table and extract the election data into an Elections object.")
 
+
+@task(name="Extract Election Data from Table", cache_policy=cache_policies.INPUTS)
+def extract_election_data_from_table(table) -> Elections:
+    client = from_genai(
+        genai.Client(
+            api_key=settings.gemini_api_key,
+        )
+    )
+
+    # Strip tags without content to avoid confusion in parsing
+    for tag in table.find_all(lambda tag: not tag.text.strip()):
+        tag.decompose()
+    
+    # Strip proprities and styles from the table to simplify parsing
+    for tag in table.find_all(True):
+        tag.attrs = {}
+    
+    return client.create(
+        model=settings.gemini_model,
+        messages=TableHistoryPrompt.prompt(normalize_instructor=True, raw_html=str(table)),
+        response_model=Elections,
+    )
 
 @flow(name="Parse Election Historical")
 def parse_election_historical(seg_mai_root: SegMaiRoot):
@@ -36,5 +55,4 @@ def parse_election_historical(seg_mai_root: SegMaiRoot):
     
     elections = extract_election_data_from_table(table)
 
-if __name__ == "__main__":
-    pass
+    #TODO: Introduce this information into a database or a file for later use in the application

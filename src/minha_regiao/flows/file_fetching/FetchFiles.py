@@ -69,6 +69,7 @@ def get_file_links(url: str = settings.sg_mai_link):
 @flow(name="Fetch Files")
 def fetch_files():
     seg_mai_root = get_file_links()
+    
     elections = parse_election_historical(seg_mai_root)
 
 if __name__ == "__main__":
