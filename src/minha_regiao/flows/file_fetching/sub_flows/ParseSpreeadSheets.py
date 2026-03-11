@@ -8,38 +8,7 @@ from minha_regiao.exceptions.FileFetchingException import FileFetchingException
 from minha_regiao.flows.file_fetching.schema.ElectionHistory import ElectionHistory
 
 
-"""
-#https://www.sg.mai.gov.pt/AdministracaoEleitoral/EleicoesReferendos/PresidenciaRepublica/Paginas/default.aspx?FirstOpen=1
-<span style="font-size:13.3333px">Resultados do escrutínio provisório - <a href="/AdministracaoEleitoral/EleicoesReferendos/PresidenciaRepublica/Documents/2ºSufragio-PR2026/PR_2026_Globais_2ºSufrágio.xlsx" target="_blank" title="resultados do Escrutínio Provisório">Folha de Cálculo​</a></span>
-"""
-
-"""
-    # TODO: Divide into first and second round, as the files are different
-    #results = []
-
-    #response = requests.get(base_url)
-    #soup = BeautifulSoup(response.text, 'html.parser')
-
-    # # TODO: The breaking point is 1996
-    # anchor_tags_after_1996 = soup.find_all('a', string=lambda text: text and "Folha de Cálculo" in text)
-    # anchor_tags_prior_1996 = soup.find_all('a', string=lambda text: text and "Ficheiro de Resultados" in text)
-
-    # for date, election in zip(election_history.election_date, election_history.elections):
-    #     # Detect if it is first or second round based on the election name
-    #     if "1º Sufrágio" in election.election_name:
-    #         pass
-    #     elif "2º Sufrágio" in election.election_name:
-    #         pass
-        
-    #     # Extract the year from the date
-    #     year = date.year
-
-    #     file_url = None
-        
-    #     pass
-
-    # return results
-"""
+@task(name="Fetch Presidential Elections First Round Files")
 def fetch_presidential_elections_first_round_files(base_url: str, election_history: ElectionHistory) -> List[ElectionFile]:
     results = []
 
@@ -48,13 +17,29 @@ def fetch_presidential_elections_first_round_files(base_url: str, election_histo
     
     anchor_tags_after_1996 = soup.find_all('a', string=lambda text: text and "Folha de Cálculo" in text)
     anchor_tags_prior_1996 = soup.find_all('a', string=lambda text: text and "Ficheiro de Resultados" in text)
-    
+
+    valid_anchor_tags = [a for a in anchor_tags_after_1996 if "2ºSufragio" not in a['href'] and "_2." not in a['href']]
+    valid_anchor_tags += [a for a in anchor_tags_prior_1996 if "2ºSufragio" not in a['href'] and "_2." not in a['href']]
+
+    if len(valid_anchor_tags) != len(election_history.election_date):
+        raise ValueError(f"Number of valid anchor tags ({len(valid_anchor_tags)}) does not match number of election dates ({len(election_history.election_date)}) for presidential elections first round.")
+        
     for date, election in zip(election_history.election_date, election_history.elections):
-        pass
+        anchor_tag = next((a for a in valid_anchor_tags if f"PR_{date.year}" in a['href']), None)
 
-    raise NotImplementedError("Fetching presidential elections first round files is not implemented yet.")
+        if anchor_tag is None:
+            raise ValueError(f"No valid anchor tag found for presidential election first round in year {date.year}.")
+        
+        file_url = "https://www.sg.mai.gov.pt" + anchor_tag['href']
+        
+        results.append(ElectionFile(
+            election=election,
+            file_url=file_url
+        ))
 
+    return results
 
+@task(name="Fetch Presidential Elections Second Round Files")
 def fetch_presidential_elections_second_round_files(base_url: str, election_history: ElectionHistory) -> List[ElectionFile]:
     results = []
 
@@ -211,10 +196,11 @@ def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[
         else:
             raise ValueError(f"Unknown election type: {election_history.election_type}")
         
-        # Check that all the results are not empty, if they are empty raise an exception
-        for key, value in results.items():
-            if not value:
-                raise FileFetchingException(f"No files found for {key} and election history {election_history.election_name} ({election_history.election_type})")
+    # Check that all the results are not empty, if they are empty raise an exception
+    for key, value in results.items():
+        if not value:
+            raise FileFetchingException(f"No files found for {key} and election history {election_history.election_name} ({election_history.election_type})")
 
-        #TODO: Ensure the number of files is equal to the number of dates in the election history.
+    #TODO: Ensure the number of files is equal to the number of dates in the election history.
+
     return results.values()
