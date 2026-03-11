@@ -13,4 +13,3 @@ class Settings(BaseSettings):
     
     sg_mai_link: str
     ollama_model: str
-    ollama_endpoint: str

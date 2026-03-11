@@ -2,15 +2,15 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from prefect import flow, task
+from minha_regiao.flows.file_fetching.Settings import Settings
 from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
 from minha_regiao.exceptions.FileFetchingException import FileFetchingException
-from minha_regiao.flows.file_fetching.sub_flows.ParseElectionHistorical import ParseElectionHistorical
+from minha_regiao.flows.file_fetching.sub_flows.ParseElectionHistorical import parse_election_historical
 
-#https://www.sg.mai.gov.pt/AdministracaoEleitoral/EleicoesReferendos/Paginas/default.aspx
-#/AdministracaoEleitoral/EleicoesReferendos/AutarquicasIntercalares/Paginas/default.aspx?FirstOpen=1
+settings = Settings()
 
 @task(name="Get File Links")
-def get_file_links(url: str = "https://www.sg.mai.gov.pt/AdministracaoEleitoral/EleicoesReferendos/Paginas/default.aspx"):
+def get_file_links(url: str = settings.sg_mai_link):
     response = requests.get(url)
 
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -69,6 +69,7 @@ def get_file_links(url: str = "https://www.sg.mai.gov.pt/AdministracaoEleitoral/
 @flow(name="Fetch Files")
 def fetch_files():
     seg_mai_root = get_file_links()
+    elections = parse_election_historical(seg_mai_root)
 
 if __name__ == "__main__":
     fetch_files()

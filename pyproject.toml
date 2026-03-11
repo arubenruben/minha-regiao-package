@@ -27,6 +27,10 @@ dependencies = [
 
 [project.optional-dependencies]
 
+instructor = [
+    "instructor>=1.14.5"
+]
+
 langchain = [
     "langchain>=1.2.11"
 ]
@@ -39,9 +43,8 @@ hugginface = [
     "huggingface_hub",
 ]
 
-
 dev = [
-    "minha_regiao[ollama, hugginface, langchain]
+    "minha_regiao[ollama, hugginface, langchain, instructor]"
 ]
 
 [tool.setuptools.packages.find]
