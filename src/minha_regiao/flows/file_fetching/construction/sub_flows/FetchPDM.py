@@ -1,9 +1,13 @@
 import os
-import asyncio
 import json
+import asyncio
+import requests
+import pandas as pd
 from tqdm import tqdm
-from bs4 import BeautifulSoup
+from pypdf import PdfReader
+from typing import Optional
 from huggingface_hub import login
+from tempfile import NamedTemporaryFile
 from prefect import flow, task, get_run_logger
 from minha_regiao.flows.file_fetching.construction.sub_flows._pdm_crawler import (
     PDMCrawler,
@@ -52,66 +56,93 @@ def login_to_hf(api_key: str):
     login(token=api_key)
 
 
-@task(name="Fetch Town Hall List")
-def fetch_town_hall_list(filepath: str):
-    with open(filepath, "r", encoding="utf-8") as f:
-        html_content = f.read()
-
-    soup = BeautifulSoup(html_content, "html.parser")
-    town_halls = []
-
-    for a_tag in soup.find_all("a", href=True):
-        href = str(a_tag.get("href", ""))
-        if href.startswith("http://www.cm-") or href.startswith("https://www.cm-"):
-            town_halls.append(href)
-
-    for a_tag in soup.find_all("a", href=True):
-        text = a_tag.get_text(strip=True).lower()
-        href = str(a_tag["href"]).replace("\t", "").replace("\n", "")
-        if "consultar website" in text:
-            town_halls.append(href)
-
-    unique_town_halls = sorted(set(town_halls))
-    unique_town_halls = [
-        url.replace("http://", "https://") for url in unique_town_halls
-    ]
-
-    for url in [
-        "https://www.mogadouro.pt/",
-        "https://www.cm-maia.pt/",
-        "https://www.ourem.pt/",
-        "https://www.sines.pt/",
-        "https://www.cmav.pt/",
-        "https://www.cmpb.pt/",
-        "https://www.chaves.pt/",
-        "https://valpacos.pt/",
-        "https://angradoheroismo.pt/",
-        "https://www.cmpv.pt/",
-        "https://cmvfc.pt/",
-    ]:
-        if url not in unique_town_halls:
-            unique_town_halls.append(url)
-
-    if "https://Http://www.cm-campo-maior.pt" in unique_town_halls:
-        unique_town_halls.remove("https://Http://www.cm-campo-maior.pt")
-        unique_town_halls.append("https://www.cm-campo-maior.pt")
-
-    assert (
-        len(unique_town_halls) == 308
-    ), f"Expected 308 town hall URLs, but found {len(unique_town_halls)}"
-
-    return unique_town_halls
-
-
 @task(name="Navigate to PDM URL")
 def navigate_to_pdm_url(root_url: str, max_concurrency: int = 12, max_pages: int = 400):
     logger = get_run_logger()
     return asyncio.run(PDMCrawler(root_url, max_concurrency, max_pages, logger).crawl())
 
 
+PDM_KEY_TERMS = ["zonamento", "usos do solo", "revisão do plano"]
+
+
+@task(name="Fetch PDF Content")
+def fetch_pdf_content(url: str) -> Optional[dict]:
+    """Fetch a PDF from URL and extract its content and page count."""
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        get_run_logger().warning(f"Failed to fetch {url}: {response.status_code}")
+        return None
+
+    temp_file_path = None
+
+    try:
+        with NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(response.content)
+            temp_file_path = temp_file.name
+
+        reader = PdfReader(temp_file_path)
+        return {
+            "url": url,
+            "content": "".join(page.extract_text() for page in reader.pages),
+            "number_of_pages": len(reader.pages),
+        }
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
+
+
+def filter_by_page_count(df: pd.DataFrame, quantile: float = 0.75) -> pd.DataFrame:
+    """Filter URLs with page count above the specified quantile."""
+    threshold = df["number_of_pages"].quantile(quantile)
+    return df[df["number_of_pages"] > threshold]
+
+
+def score_content_by_key_terms(content: str, key_terms: list[str]) -> int:
+    """Count occurrences of key terms in the content."""
+    content_lower = content.lower()
+    return sum(content_lower.count(term) for term in key_terms)
+
+
+def select_best_candidate(
+    filtered_df: pd.DataFrame, key_terms: list[str]
+) -> Optional[str]:
+    """Select the URL with the highest key term count from filtered candidates."""
+    best_url = None
+    max_key_terms_count = 0
+
+    for _, row in filtered_df.iterrows():
+        key_terms_count = score_content_by_key_terms(row["content"], key_terms)
+        if key_terms_count > max_key_terms_count:
+            max_key_terms_count = key_terms_count
+            best_url = row["url"]
+
+    return best_url
+
+
+@task(name="Filter PDM Candidates")
+def filter_pdm_candidates(pdm_results: list[str]) -> Optional[str]:
+    pdf_contents = [
+        fetch_pdf_content(url)
+        for url in tqdm(pdm_results, desc="Filtering PDM candidates")
+    ]
+
+    valid_contents = [content for content in pdf_contents if content is not None]
+
+    if not valid_contents:
+        return None
+
+    df = pd.DataFrame(valid_contents)
+    filtered_df = filter_by_page_count(df)
+
+    if filtered_df.empty:
+        return None
+
+    return select_best_candidate(filtered_df, PDM_KEY_TERMS)
+
+
 @flow(name="Fetch PDM")
-def fetch_pdm():
-    url_town_halls = fetch_town_hall_list(filepath=os.path.join(DATA_DIR, "link.html"))
+def fetch_pdm(url_town_halls: list[str]) -> dict[str, list[str]]:
     cached_results = load_pdm_cache(PDM_CACHE_FILEPATH)
     selected_town_halls = url_town_halls[:2]
     pending_town_halls = [
@@ -138,8 +169,14 @@ def fetch_pdm():
             progress.update(1)
             progress.set_postfix_str(f"done: {url}")
 
-    return url_town_halls
+    final_results = {}
 
+    for url, pdm_urls in tqdm(results.items(), desc="Logging PDM URLs"):
+        candidate = filter_pdm_candidates(pdm_urls)
 
-if __name__ == "__main__":
-    fetch_pdm()
+        if not candidate:
+            get_run_logger().warning(f"No valid PDM candidate found for {url}")
+
+        final_results[url] = candidate
+
+    return final_results
