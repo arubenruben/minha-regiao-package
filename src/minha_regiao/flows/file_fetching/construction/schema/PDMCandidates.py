@@ -1,2 +1,0 @@
-class PDMCandidates:
-    pass

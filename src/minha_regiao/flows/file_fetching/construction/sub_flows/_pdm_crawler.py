@@ -1,8 +1,12 @@
 import asyncio
 import re
 import requests
+from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlsplit, urlunsplit
+from minha_regiao.flows.file_fetching.construction.schema.PDMCrawlResultDTO import (
+    PDMCrawlResultDTO,
+)
 
 
 def normalize_for_keyword_match(value: str) -> str:
@@ -59,6 +63,7 @@ class PDMCrawler:
     def __init__(self, root_url: str, max_concurrency: int, max_pages: int, logger):
         normalized = normalize_url(root_url)
         root_parts = urlparse(normalized)
+        self.root_parts = root_parts
         self.root_domain = root_parts.netloc
         self.root_path = root_parts.path or "/"
         if self.root_path != "/":
@@ -125,7 +130,7 @@ class PDMCrawler:
             finally:
                 self.queue.task_done()
 
-    async def crawl(self) -> list[str]:
+    async def crawl(self) -> PDMCrawlResultDTO:
         workers = [
             asyncio.create_task(self._worker())
             for _ in range(max(1, self.max_concurrency))
@@ -137,4 +142,10 @@ class PDMCrawler:
             worker.cancel()
 
         await asyncio.gather(*workers, return_exceptions=True)
-        return sorted(self.candidate_pdf_urls)
+        
+        return PDMCrawlResultDTO(
+            town_hall_url=f"{self.root_parts.scheme}://{self.root_domain}{self.root_path}",
+            candidate_pdf_urls=sorted(self.candidate_pdf_urls),
+            pages_visited=len(self.visited),
+            crawl_timestamp=datetime.now().isoformat(),
+        )

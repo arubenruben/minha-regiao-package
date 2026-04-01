@@ -12,6 +12,12 @@ from prefect import flow, task, get_run_logger
 from minha_regiao.flows.file_fetching.construction.sub_flows._pdm_crawler import (
     PDMCrawler,
 )
+from minha_regiao.flows.file_fetching.construction.schema.TownHallDTO import TownHallDTO
+from minha_regiao.flows.file_fetching.construction.schema.PDMCandidateDTO import PDMCandidateDTO
+from minha_regiao.flows.file_fetching.construction.schema.PDMCrawlResultDTO import PDMCrawlResultDTO
+from minha_regiao.flows.file_fetching.construction.schema.PDMFetchResultDTO import PDMFetchResultDTO
+from minha_regiao.flows.file_fetching.construction.schema.PDFContentDTO import PDFContentDTO
+from minha_regiao.flows.file_fetching.construction.schema.PDMCacheEntryDTO import PDMCacheEntryDTO
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONSTRUCTION_DIR = os.path.dirname(CURRENT_DIR)
@@ -20,7 +26,7 @@ DATA_DIR = os.path.join(CONSTRUCTION_DIR, "data")
 PDM_CACHE_FILEPATH = os.path.join(CACHE_DIR, "pdm_results.json")
 
 
-def load_pdm_cache(cache_filepath: str) -> dict[str, list[str]]:
+def load_pdm_cache(cache_filepath: str) -> dict[str, PDMCacheEntryDTO]:
     if not os.path.exists(cache_filepath):
         return {}
 
@@ -31,21 +37,30 @@ def load_pdm_cache(cache_filepath: str) -> dict[str, list[str]]:
         raise ValueError(f"Expected a JSON object in {cache_filepath}")
 
     return {
-        str(url): result
+        str(url): PDMCacheEntryDTO(
+            town_hall_url=str(url),
+            candidate_urls=result,
+        )
         for url, result in cached_entries.items()
         if isinstance(url, str) and isinstance(result, list)
     }
 
 
 def persist_pdm_cache(
-    cache_filepath: str, cached_entries: dict[str, list[str]]
+    cache_filepath: str, cached_entries: dict[str, PDMCacheEntryDTO]
 ) -> None:
     os.makedirs(os.path.dirname(cache_filepath), exist_ok=True)
     temp_filepath = f"{cache_filepath}.tmp"
 
+    # Convert DTOs to dict for JSON serialization
+    serializable_entries = {
+        entry.town_hall_url: entry.candidate_urls
+        for entry in cached_entries.values()
+    }
+
     with open(temp_filepath, "w", encoding="utf-8") as cache_file:
         json.dump(
-            cached_entries, cache_file, ensure_ascii=False, indent=2, sort_keys=True
+            serializable_entries, cache_file, ensure_ascii=False, indent=2, sort_keys=True
         )
 
     os.replace(temp_filepath, cache_filepath)
@@ -57,16 +72,16 @@ def login_to_hf(api_key: str):
 
 
 @task(name="Navigate to PDM URL")
-def navigate_to_pdm_url(root_url: str, max_concurrency: int = 12, max_pages: int = 400):
+def navigate_to_pdm_url(town_hall: TownHallDTO, max_concurrency: int = 12, max_pages: int = 400) -> PDMCrawlResultDTO:
     logger = get_run_logger()
-    return asyncio.run(PDMCrawler(root_url, max_concurrency, max_pages, logger).crawl())
+    return asyncio.run(PDMCrawler(town_hall.url, max_concurrency, max_pages, logger).crawl())
 
 
 PDM_KEY_TERMS = ["zonamento", "usos do solo", "revisão do plano"]
 
 
 @task(name="Fetch PDF Content")
-def fetch_pdf_content(url: str) -> Optional[dict]:
+def fetch_pdf_content(url: str) -> Optional[PDFContentDTO]:
     """Fetch a PDF from URL and extract its content and page count."""
     response = requests.get(url)
 
@@ -82,11 +97,12 @@ def fetch_pdf_content(url: str) -> Optional[dict]:
             temp_file_path = temp_file.name
 
         reader = PdfReader(temp_file_path)
-        return {
-            "url": url,
-            "content": "".join(page.extract_text() for page in reader.pages),
-            "number_of_pages": len(reader.pages),
-        }
+        return PDFContentDTO(
+            url=url,
+            content="".join(page.extract_text() for page in reader.pages),
+            number_of_pages=len(reader.pages),
+            file_size_bytes=len(response.content),
+        )
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
@@ -121,7 +137,7 @@ def select_best_candidate(
 
 
 @task(name="Filter PDM Candidates")
-def filter_pdm_candidates(pdm_results: list[str]) -> Optional[str]:
+def filter_pdm_candidates(pdm_results: list[str]) -> Optional[PDFContentDTO]:
     pdf_contents = [
         fetch_pdf_content(url)
         for url in tqdm(pdm_results, desc="Filtering PDM candidates")
@@ -132,51 +148,78 @@ def filter_pdm_candidates(pdm_results: list[str]) -> Optional[str]:
     if not valid_contents:
         return None
 
-    df = pd.DataFrame(valid_contents)
+    df = pd.DataFrame([content.model_dump() for content in valid_contents])
     filtered_df = filter_by_page_count(df)
 
     if filtered_df.empty:
         return None
 
-    return select_best_candidate(filtered_df, PDM_KEY_TERMS)
+    best_url = select_best_candidate(filtered_df, PDM_KEY_TERMS)
+    if best_url:
+        return next((c for c in valid_contents if c.url == best_url), None)
+    return None
 
 
 @flow(name="Fetch PDM")
-def fetch_pdm(url_town_halls: list[str]) -> dict[str, list[str]]:
+def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
     cached_results = load_pdm_cache(PDM_CACHE_FILEPATH)
-    selected_town_halls = url_town_halls[:2]
+    selected_town_halls = town_halls[:2]
     pending_town_halls = [
-        url for url in selected_town_halls if url not in cached_results
+        th for th in selected_town_halls if th.url not in cached_results
     ]
 
     submitted_tasks = {
-        url: navigate_to_pdm_url.submit(url) for url in pending_town_halls
+        th.url: navigate_to_pdm_url.submit(th) for th in pending_town_halls
     }
 
-    results = {
-        url: cached_results[url] for url in selected_town_halls if url in cached_results
-    }
+    results: dict[str, PDMCrawlResultDTO] = {}
 
     with tqdm(total=len(selected_town_halls), desc="Processing town halls") as progress:
-        for cached_url in results:
+        for cached_url in [th.url for th in selected_town_halls if th.url in cached_results]:
+            cache_entry = cached_results[cached_url]
+            results[cached_url] = PDMCrawlResultDTO(
+                town_hall_url=cache_entry.town_hall_url,
+                candidate_pdf_urls=cache_entry.candidate_urls,
+                pages_visited=0,
+            )
             progress.update(1)
             progress.set_postfix_str(f"cached: {cached_url}")
 
         for url, future in submitted_tasks.items():
             results[url] = future.result()
-            cached_results[url] = results[url]
+            cached_results[url] = PDMCacheEntryDTO(
+                town_hall_url=url,
+                candidate_urls=results[url].candidate_pdf_urls,
+            )
             persist_pdm_cache(PDM_CACHE_FILEPATH, cached_results)
             progress.update(1)
             progress.set_postfix_str(f"done: {url}")
 
+    all_candidates = []
     final_results = {}
 
-    for url, pdm_urls in tqdm(results.items(), desc="Logging PDM URLs"):
-        candidate = filter_pdm_candidates(pdm_urls)
+    for url, crawl_result in tqdm(results.items(), desc="Logging PDM URLs"):
+        candidate = filter_pdm_candidates(crawl_result.candidate_pdf_urls)
 
         if not candidate:
             get_run_logger().warning(f"No valid PDM candidate found for {url}")
+        else:
+            all_candidates.append(
+                PDMCandidateDTO(
+                    url=candidate.url,
+                    source_town_hall=url,
+                    metadata={
+                        "number_of_pages": candidate.number_of_pages,
+                        "file_size_bytes": candidate.file_size_bytes,
+                    }
+                )
+            )
 
         final_results[url] = candidate
 
-    return final_results
+    return PDMFetchResultDTO(
+        town_halls_processed=len(results),
+        total_candidates_found=len(all_candidates),
+        candidates=all_candidates,
+        crawl_results=list(results.values()),
+    )
