@@ -194,10 +194,8 @@ def filter_pdm_candidates(pdm_results: list[str]) -> Optional[PDFContentDTO]:
 @flow(name="Fetch PDM")
 def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
     cached_results = load_pdm_cache(PDM_CACHE_FILEPATH)
-    selected_town_halls = town_halls[:2]
-    pending_town_halls = [
-        th for th in selected_town_halls if th.url not in cached_results
-    ]
+
+    pending_town_halls = [th for th in town_halls if th.url not in cached_results]
 
     submitted_tasks = {
         th.url: navigate_to_pdm_url.submit(th) for th in pending_town_halls
@@ -205,10 +203,8 @@ def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
 
     results: dict[str, PDMCrawlResultDTO] = {}
 
-    with tqdm(total=len(selected_town_halls), desc="Processing town halls") as progress:
-        for cached_url in [
-            th.url for th in selected_town_halls if th.url in cached_results
-        ]:
+    with tqdm(total=len(town_halls), desc="Processing town halls") as progress:
+        for cached_url in [th.url for th in town_halls if th.url in cached_results]:
             cache_entry = cached_results[cached_url]
             results[cached_url] = PDMCrawlResultDTO(
                 town_hall_url=cache_entry.town_hall_url,
