@@ -72,6 +72,7 @@ def fetch_town_hall_list(filepath: str) -> list[TownHallDTO]:
 
     # Fix malformed URL
     malformed_url = "https://Http://www.cm-campo-maior.pt"
+    
     if malformed_url in seen_urls:
         seen_urls.remove(malformed_url)
         unique_town_halls = [

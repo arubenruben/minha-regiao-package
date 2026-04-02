@@ -1,5 +1,8 @@
 from typing import Optional
 from minha_regiao.flows.file_fetching.construction.schema.Schema import Schema
+from minha_regiao.flows.file_fetching.construction.schema.PDFContentDTO import (
+    PDFContentDTO,
+)
 
 
 class PDMCrawlResultDTO(Schema):
@@ -9,3 +12,4 @@ class PDMCrawlResultDTO(Schema):
     candidate_pdf_urls: list[str]
     pages_visited: int
     crawl_timestamp: Optional[str] = None
+    best_candidate: Optional[PDFContentDTO] = None

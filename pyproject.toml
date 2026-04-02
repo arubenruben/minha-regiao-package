@@ -17,6 +17,7 @@
     dependencies = [
         "prefect>=3.6.21",
         "requests",
+        "httpx",
         "pandas",
         "beautifulsoup4",
         "pydantic",
