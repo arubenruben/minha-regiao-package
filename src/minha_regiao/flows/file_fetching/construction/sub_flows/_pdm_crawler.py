@@ -58,6 +58,44 @@ PDM_KEYWORDS = tuple(
     normalize_for_keyword_match(kw) for kw in ("PDM", "plano diretor municipal")
 )
 
+FILE_EXTENSIONS = frozenset(
+    {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".zip",
+        ".rar",
+        ".7z",
+        ".tar",
+        ".gz",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".svg",
+        ".mp3",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".wmv",
+        ".txt",
+        ".csv",
+        ".xml",
+        ".json",
+    }
+)
+
+
+def is_file_url(url: str) -> bool:
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    return any(path.endswith(ext) for ext in FILE_EXTENSIONS)
+
 
 class PDMCrawler:
     def __init__(self, root_url: str, max_concurrency: int, max_pages: int, logger):
@@ -94,6 +132,9 @@ class PDMCrawler:
                 self.candidate_pdf_urls.add(full_url)
 
             if is_within_root_scope(full_url, self.root_domain, self.root_path):
+                if is_file_url(full_url):
+                    continue
+
                 async with self.lock:
                     if (
                         full_url not in self.visited
@@ -108,7 +149,10 @@ class PDMCrawler:
             current_url = await self.queue.get()
             try:
                 async with self.lock:
-                    if current_url in self.visited or len(self.visited) >= self.max_pages:
+                    if (
+                        current_url in self.visited
+                        or len(self.visited) >= self.max_pages
+                    ):
                         continue
                     self.visited.add(current_url)
 
@@ -142,7 +186,7 @@ class PDMCrawler:
             worker.cancel()
 
         await asyncio.gather(*workers, return_exceptions=True)
-        
+
         return PDMCrawlResultDTO(
             town_hall_url=f"{self.root_parts.scheme}://{self.root_domain}{self.root_path}",
             candidate_pdf_urls=sorted(self.candidate_pdf_urls),

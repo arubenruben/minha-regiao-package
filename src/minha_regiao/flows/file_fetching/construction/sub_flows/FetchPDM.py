@@ -8,7 +8,7 @@ from pypdf import PdfReader
 from typing import Optional
 from huggingface_hub import login
 from tempfile import NamedTemporaryFile
-from prefect import flow, task, get_run_logger
+from prefect import flow, task, get_run_logger, cache_policies
 from minha_regiao.flows.file_fetching.construction.sub_flows._pdm_crawler import (
     PDMCrawler,
 )
@@ -97,7 +97,7 @@ def navigate_to_pdm_url(
 PDM_KEY_TERMS = ["zonamento", "usos do solo", "revisão do plano"]
 
 
-@task(name="Fetch PDF Content")
+@task(name="Fetch PDF Content", cache_policy=cache_policies.NO_CACHE)
 async def fetch_pdf_content_async(
     url: str, client: httpx.AsyncClient
 ) -> Optional[PDFContentDTO]:
