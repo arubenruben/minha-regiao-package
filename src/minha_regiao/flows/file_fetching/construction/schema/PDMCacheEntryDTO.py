@@ -7,10 +7,15 @@ class PDMCacheEntryDTO(Schema):
 
     town_hall_url: str
     candidate_urls: list[str]
-    last_updated: Optional[str] = None
+    best_candidate: Optional[dict] = None  # Stores PDFContentDTO data if filtered
+    crawl_timestamp: Optional[str] = None
+    filter_timestamp: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
-            self.town_hall_url: self.candidate_urls,
+            "candidate_urls": self.candidate_urls,
+            "best_candidate": self.best_candidate,
+            "crawl_timestamp": self.crawl_timestamp,
+            "filter_timestamp": self.filter_timestamp,
         }
