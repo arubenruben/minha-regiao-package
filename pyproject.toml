@@ -12,7 +12,7 @@
     authors = [
         {name = "Rúben Almeida", email = "ruben.f.almeida@inesctec.pt"}
     ]
-    requires-python = ">=3.13"
+    requires-python = ">=3.11"
 
     dependencies = [
         "prefect>=3.6.21",
