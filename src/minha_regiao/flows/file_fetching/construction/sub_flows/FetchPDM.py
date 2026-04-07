@@ -8,9 +8,9 @@ from pypdf import PdfReader
 from typing import Optional, Any
 from datetime import datetime
 from threading import Lock
-from huggingface_hub import login
 from tempfile import NamedTemporaryFile
 from prefect import flow, task, get_run_logger
+from pypdf.errors import PdfStreamError, PdfReadError
 from minha_regiao.flows.file_fetching.construction.sub_flows.pdms import (
     crawl_for_pdm_candidates,
 )
@@ -199,7 +199,7 @@ async def fetch_pdf_content_async(
 ) -> Optional[PDFContentDTO]:
     """Fetch a PDF from URL and extract its content and page count."""
     try:
-        response = await client.get(url, timeout=60.0)
+        response = await client.get(url, timeout=600.0)
     except Exception as e:
         logger.debug(f"Failed to fetch {url}: {e}")
         return None
@@ -215,16 +215,23 @@ async def fetch_pdf_content_async(
             temp_file.write(response.content)
             temp_file_path = temp_file.name
 
-        reader = PdfReader(temp_file_path)
-        logger.debug(
-            f"Successfully fetched PDF: {url} ({len(reader.pages)} pages, {len(response.content)} bytes)"
-        )
-        return PDFContentDTO(
-            url=url,
-            content="".join(page.extract_text() for page in reader.pages),
-            number_of_pages=len(reader.pages),
-            file_size_bytes=len(response.content),
-        )
+        try:
+            reader = PdfReader(temp_file_path)
+            logger.debug(
+                f"Successfully fetched PDF: {url} ({len(reader.pages)} pages, {len(response.content)} bytes)"
+            )
+            return PDFContentDTO(
+                url=url,
+                content="".join(page.extract_text() for page in reader.pages),
+                number_of_pages=len(reader.pages),
+                file_size_bytes=len(response.content),
+            )
+        except (PdfStreamError, PdfReadError) as pdf_error:
+            logger.debug(f"Failed to parse PDF from {url}: {pdf_error}")
+            return None
+        except Exception as parse_error:
+            logger.debug(f"Unexpected error parsing PDF from {url}: {parse_error}")
+            return None
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
@@ -240,7 +247,7 @@ async def fetch_all_pdfs_concurrently(
     logger = get_run_logger()
     limits = httpx.Limits(max_connections=max_concurrency)
 
-    async with httpx.AsyncClient(limits=limits, timeout=30.0) as client:
+    async with httpx.AsyncClient(limits=limits, timeout=600.0) as client:
         tasks = [fetch_pdf_content_async(url, client, logger) for url in urls]
         return await asyncio.gather(*tasks)
 
