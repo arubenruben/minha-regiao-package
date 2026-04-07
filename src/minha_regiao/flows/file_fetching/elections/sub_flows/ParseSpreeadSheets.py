@@ -1,5 +1,6 @@
 import re
-import requests
+import httpx
+import asyncio
 from typing import List, Dict
 from bs4 import BeautifulSoup
 from prefect import flow, task, get_run_logger
@@ -10,11 +11,10 @@ from minha_regiao.flows.file_fetching.schema.ElectionHistory import ElectionHist
 
 
 @task(name="Fetch Election Pages")
-def fetch_election_pages(seg_mai_root: SegMaiRoot) -> Dict[str, BeautifulSoup]:
-    """Fetch all election pages once and return a mapping of election type to soup."""
+async def fetch_election_pages(seg_mai_root: SegMaiRoot) -> Dict[str, BeautifulSoup]:
+    """Fetch all election pages concurrently and return a mapping of election type to soup."""
     logger = get_run_logger()
     logger.info("Fetching all election pages")
-    soups = {}
     
     urls_map = {
         'PR': seg_mai_root.presidential_elections_url,
@@ -23,11 +23,18 @@ def fetch_election_pages(seg_mai_root: SegMaiRoot) -> Dict[str, BeautifulSoup]:
         'PE': seg_mai_root.european_parliament_elections_url,
     }
     
-    for election_type, url in urls_map.items():
+    async def fetch_page(client: httpx.AsyncClient, election_type: str, url: str) -> tuple[str, BeautifulSoup]:
+        """Fetch a single election page."""
         logger.debug(f"Fetching {election_type} election page from {url}")
-        response = requests.get(url)
-        soups[election_type] = BeautifulSoup(response.text, 'html.parser')
+        response = await client.get(url, timeout=60.0)
+        response.raise_for_status()
+        return election_type, BeautifulSoup(response.text, 'html.parser')
     
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        tasks = [fetch_page(client, election_type, url) for election_type, url in urls_map.items()]
+        results = await asyncio.gather(*tasks)
+    
+    soups = {election_type: soup for election_type, soup in results}
     logger.info(f"Successfully fetched {len(soups)} election pages")
     return soups
 
@@ -306,12 +313,12 @@ def fetch_constitutional_assembly_files(
     raise NotImplementedError("Constitutional Assembly elections files fetching not implemented yet.")   
 
 @flow(name="Fetch Spreadsheet Files")
-def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[ElectionHistory]) -> List[ElectionFile]:
+async def fetch_spreadsheet_files(seg_mai_root: SegMaiRoot, elections_histories: List[ElectionHistory]) -> List[ElectionFile]:
     logger = get_run_logger()
     logger.info(f"Starting Fetch Spreadsheet Files flow with {len(elections_histories)} election histories")
     
     # Fetch all election pages once to avoid duplicate requests
-    soups = fetch_election_pages(seg_mai_root)
+    soups = await fetch_election_pages(seg_mai_root)
     
     results = {
         'PR': [],

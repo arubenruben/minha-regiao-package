@@ -1,4 +1,4 @@
-import requests
+import httpx
 from typing import List
 from google import genai
 from bs4 import BeautifulSoup
@@ -18,20 +18,21 @@ settings = Settings()
 def get_historical_elections_table(url: str):
     logger = get_run_logger()
     logger.info(f"Fetching historical elections table from {url}")
-    response = requests.get(url)
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    table = soup.find('table', id='MSO_ContentTable')
-
-    if not table:
-        logger.error("Historical elections table not found on the page")
-        raise FileFetchingException("Historical elections table not found on the page.")
     
-    logger.info("Successfully retrieved historical elections table")
-    return table
+    with httpx.Client(timeout=60.0) as client:
+        response = client.get(url)
+        response.raise_for_status()
 
-@task(name="Extract Election Data from Table", cache_policy=cache_policies.INPUTS)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        table = soup.find('table', id='MSO_ContentTable')
+
+        if not table:
+            logger.error("Historical elections table not found on the page")
+            raise FileFetchingException("Historical elections table not found on the page.")
+        
+        logger.info("Successfully retrieved historical elections table")
+        return table
 def extract_election_data_from_table(table) -> List[ElectionHistory]:
     logger = get_run_logger()
     logger.info("Extracting election data from table using Gemini")

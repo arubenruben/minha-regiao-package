@@ -10,9 +10,9 @@ from datetime import datetime
 from threading import Lock
 from huggingface_hub import login
 from tempfile import NamedTemporaryFile
-from prefect import flow, task, get_run_logger, cache_policies
-from minha_regiao.flows.file_fetching.construction.sub_flows._pdm_crawler import (
-    PDMCrawler,
+from prefect import flow, task, get_run_logger
+from minha_regiao.flows.file_fetching.construction.sub_flows.pdms import (
+    crawl_for_pdm_candidates,
 )
 from minha_regiao.flows.file_fetching.construction.schema.TownHallDTO import TownHallDTO
 from minha_regiao.flows.file_fetching.construction.schema.PDMCandidateDTO import (
@@ -36,11 +36,13 @@ CONSTRUCTION_DIR = os.path.dirname(CURRENT_DIR)
 CACHE_DIR = os.path.join(CONSTRUCTION_DIR, "cache")
 DATA_DIR = os.path.join(CONSTRUCTION_DIR, "data")
 PDM_CACHE_FILEPATH = os.path.join(CACHE_DIR, "pdm_results.json")
+PDM_KEY_TERMS = ["zonamento", "usos do solo", "revisão do plano"]
 
 # Global cache lock for thread-safe operations
 _cache_lock = Lock()
 
 
+@task(name="Load PDM Cache")
 def load_pdm_cache(cache_filepath: str) -> dict[str, PDMCacheEntryDTO]:
     """Load cache from file in a thread-safe manner."""
     with _cache_lock:
@@ -54,11 +56,11 @@ def load_pdm_cache(cache_filepath: str) -> dict[str, PDMCacheEntryDTO]:
             raise ValueError(f"Expected a JSON object in {cache_filepath}")
 
         result = {}
+
         for url, entry_data in cached_entries.items():
             if not isinstance(url, str):
                 continue
 
-            # Handle old cache format (list) and new format (dict)
             if isinstance(entry_data, list):
                 result[url] = PDMCacheEntryDTO(
                     town_hall_url=url,
@@ -76,6 +78,7 @@ def load_pdm_cache(cache_filepath: str) -> dict[str, PDMCacheEntryDTO]:
         return result
 
 
+@task(name="Persist PDM Cache")
 def persist_pdm_cache(
     cache_filepath: str, cached_entries: dict[str, PDMCacheEntryDTO]
 ) -> None:
@@ -101,6 +104,7 @@ def persist_pdm_cache(
         os.replace(temp_filepath, cache_filepath)
 
 
+@task(name="Save Crawl Result to Cache")
 def save_crawl_result(
     cache_filepath: str,
     url: str,
@@ -123,6 +127,7 @@ def save_crawl_result(
     persist_pdm_cache(cache_filepath, cached_entries)
 
 
+@task(name="Save Filter Result to Cache")
 def save_filter_result(
     cache_filepath: str,
     url: str,
@@ -139,19 +144,15 @@ def save_filter_result(
         persist_pdm_cache(cache_filepath, cached_entries)
 
 
-@task(name="Login to Hugging Face")
-def login_to_hf(api_key: str):
-    login(token=api_key)
-
-
 @task(name="Navigate to PDM URL")
 def navigate_to_pdm_url(
     town_hall: TownHallDTO, max_concurrency: int = 12, max_pages: int = 400
 ) -> PDMCrawlResultDTO:
     logger = get_run_logger()
-    return asyncio.run(
-        PDMCrawler(town_hall.url, max_concurrency, max_pages, logger).crawl()
+    result = asyncio.run(
+        crawl_for_pdm_candidates(town_hall.url, max_concurrency, max_pages, logger)
     )
+    return result
 
 
 @task(name="Crawl and Cache PDM")
@@ -174,34 +175,37 @@ def filter_and_cache_pdm_candidate(
     cache_filepath: str,
 ) -> Optional[PDFContentDTO]:
     """Filter PDM candidates and save best candidate to cache immediately."""
+    logger = get_run_logger()
     if not candidate_urls:
+        logger.debug(f"No candidate URLs for {url}")
         return None
 
+    logger.info(f"Filtering {len(candidate_urls)} PDM candidates for: {url}")
     best_candidate = filter_pdm_candidates(candidate_urls)
     save_filter_result(cache_filepath, url, best_candidate)
 
-    if not best_candidate:
-        get_run_logger().warning(f"No valid PDM candidate found for {url}")
+    if best_candidate:
+        logger.info(
+            f"Selected best PDM candidate: {best_candidate.url} ({best_candidate.number_of_pages} pages, {best_candidate.file_size_bytes} bytes)"
+        )
+    else:
+        logger.warning(f"No valid PDM candidate found for {url}")
 
     return best_candidate
 
 
-PDM_KEY_TERMS = ["zonamento", "usos do solo", "revisão do plano"]
-
-
-@task(name="Fetch PDF Content", cache_policy=cache_policies.NO_CACHE)
 async def fetch_pdf_content_async(
-    url: str, client: httpx.AsyncClient
+    url: str, client: httpx.AsyncClient, logger
 ) -> Optional[PDFContentDTO]:
     """Fetch a PDF from URL and extract its content and page count."""
     try:
-        response = await client.get(url)
+        response = await client.get(url, timeout=60.0)
     except Exception as e:
-        get_run_logger().warning(f"Failed to fetch {url}: {e}")
+        logger.debug(f"Failed to fetch {url}: {e}")
         return None
 
     if response.status_code != 200:
-        get_run_logger().warning(f"Failed to fetch {url}: {response.status_code}")
+        logger.debug(f"Failed to fetch {url}: {response.status_code}")
         return None
 
     temp_file_path = None
@@ -212,6 +216,9 @@ async def fetch_pdf_content_async(
             temp_file_path = temp_file.name
 
         reader = PdfReader(temp_file_path)
+        logger.debug(
+            f"Successfully fetched PDF: {url} ({len(reader.pages)} pages, {len(response.content)} bytes)"
+        )
         return PDFContentDTO(
             url=url,
             content="".join(page.extract_text() for page in reader.pages),
@@ -223,29 +230,22 @@ async def fetch_pdf_content_async(
             os.unlink(temp_file_path)
 
 
+@task(name="Fetch All PDFs Concurrently")
 async def fetch_all_pdfs_concurrently(
     urls: list[str], max_concurrency: int = 10
 ) -> list[Optional[PDFContentDTO]]:
     """Fetch multiple PDFs concurrently using httpx."""
+    from prefect import get_run_logger
+
+    logger = get_run_logger()
     limits = httpx.Limits(max_connections=max_concurrency)
 
     async with httpx.AsyncClient(limits=limits, timeout=30.0) as client:
-        tasks = [fetch_pdf_content_async(url, client) for url in urls]
+        tasks = [fetch_pdf_content_async(url, client, logger) for url in urls]
         return await asyncio.gather(*tasks)
 
 
-def filter_by_page_count(df: pd.DataFrame, quantile: float = 0.75) -> pd.DataFrame:
-    """Filter URLs with page count above the specified quantile."""
-    threshold = df["number_of_pages"].quantile(quantile)
-    return df[df["number_of_pages"] > threshold]
-
-
-def score_content_by_key_terms(content: str, key_terms: list[str]) -> int:
-    """Count occurrences of key terms in the content."""
-    content_lower = content.lower()
-    return sum(content_lower.count(term) for term in key_terms)
-
-
+@task(name="Select Best PDM Candidate")
 def select_best_candidate(
     filtered_df: pd.DataFrame, key_terms: list[str]
 ) -> Optional[str]:
@@ -254,7 +254,8 @@ def select_best_candidate(
     max_key_terms_count = 0
 
     for _, row in filtered_df.iterrows():
-        key_terms_count = score_content_by_key_terms(row["content"], key_terms)
+        content_lower = row["content"].lower()
+        key_terms_count = sum(content_lower.count(term) for term in key_terms)
         if key_terms_count > max_key_terms_count:
             max_key_terms_count = key_terms_count
             best_url = row["url"]
@@ -272,7 +273,10 @@ def filter_pdm_candidates(pdm_results: list[str]) -> Optional[PDFContentDTO]:
         return None
 
     df = pd.DataFrame([content.model_dump() for content in valid_contents])
-    filtered_df = filter_by_page_count(df)
+
+    # Filter URLs with page count above the 75th percentile
+    threshold = df["number_of_pages"].quantile(0.75)
+    filtered_df = df[df["number_of_pages"] > threshold]
 
     if filtered_df.empty:
         return None
@@ -288,12 +292,7 @@ def categorize_town_halls_by_cache(
     town_halls: list[TownHallDTO],
     cached_entries: dict[str, PDMCacheEntryDTO],
 ) -> tuple[list[TownHallDTO], list[str], list[str]]:
-    """
-    Categorize town halls into three groups based on cache status.
-
-    Returns:
-        (to_crawl, to_filter, already_complete)
-    """
+    logger = get_run_logger()
     to_crawl = []
     to_filter = []
     already_complete = []
@@ -303,9 +302,18 @@ def categorize_town_halls_by_cache(
             to_crawl.append(th)
         elif cached_entries[th.url].filter_timestamp is None:
             to_filter.append(th.url)
+            logger.info(
+                f"Skipping PDM candidate crawl (already in cache): {th.name} ({th.url})"
+            )
         else:
             already_complete.append(th.url)
+            logger.info(
+                f"Skipping PDM processing (best candidate already determined): {th.name} ({th.url})"
+            )
 
+    logger.info(
+        f"Cache status: {len(to_crawl)} to crawl, {len(to_filter)} to filter, {len(already_complete)} already complete"
+    )
     return to_crawl, to_filter, already_complete
 
 
@@ -314,8 +322,9 @@ def reconstruct_result_from_cache(
     url: str,
     cache_entry: PDMCacheEntryDTO,
 ) -> PDMCrawlResultDTO:
-    """Reconstruct a PDMCrawlResultDTO from a cache entry."""
+
     best_candidate = None
+
     if cache_entry.best_candidate:
         best_candidate = PDFContentDTO(**cache_entry.best_candidate)
 
@@ -423,8 +432,12 @@ def wait_for_filter_results(
 
 @flow(name="Fetch PDM")
 def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
+    logger = get_run_logger()
+    logger.info(f"Starting PDM fetch flow for {len(town_halls)} town halls")
+
     # Load cache and categorize work
     cached_entries = load_pdm_cache(PDM_CACHE_FILEPATH)
+    logger.info(f"Loaded cache with {len(cached_entries)} entries")
     to_crawl, to_filter, already_complete = categorize_town_halls_by_cache(
         town_halls, cached_entries
     )
@@ -465,6 +478,13 @@ def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
 
     # Build final output
     all_candidates = build_final_candidates(results)
+
+    logger.info(f"\nPDM Fetch Summary:")
+    logger.info(f"  Town halls processed: {len(results)}")
+    logger.info(f"  Total candidates found: {len(all_candidates)}")
+    logger.info(
+        f"  Candidates with best PDM: {len([c for c in all_candidates if c is not None])}"
+    )
 
     return PDMFetchResultDTO(
         town_halls_processed=len(results),
