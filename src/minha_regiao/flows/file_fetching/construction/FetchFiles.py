@@ -24,8 +24,14 @@ def fetch_files() -> PDMFetchResultDTO:
     if len(town_halls) > 5:
         logger.debug(f"  ... and {len(town_halls) - 5} more")
 
+    # Set concurrency level: 1 for debug mode, 12 for production
+    max_concurrency = 1 if __debug__ else 12
+    logger.info(
+        f"\nConcurrency level: {max_concurrency} ({'debug mode' if __debug__ else 'production mode'})"
+    )
+
     logger.info("\nFetching PDM candidates...")
-    pdm_result = fetch_pdm(town_halls)
+    pdm_result = fetch_pdm(town_halls, max_concurrency)
     logger.info(f"✓ Processed {pdm_result.town_halls_processed} town halls")
     logger.info(f"✓ Found {pdm_result.total_candidates_found} PDM candidates")
 

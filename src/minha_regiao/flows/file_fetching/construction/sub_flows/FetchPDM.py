@@ -5,9 +5,9 @@ import asyncio
 import pandas as pd
 from tqdm import tqdm
 from pypdf import PdfReader
-from typing import Optional, Any
-from datetime import datetime
 from threading import Lock
+from datetime import datetime
+from typing import Optional, Any
 from tempfile import NamedTemporaryFile
 from prefect import flow, task, get_run_logger
 from pypdf.errors import PdfStreamError, PdfReadError
@@ -36,7 +36,54 @@ CONSTRUCTION_DIR = os.path.dirname(CURRENT_DIR)
 CACHE_DIR = os.path.join(CONSTRUCTION_DIR, "cache")
 DATA_DIR = os.path.join(CONSTRUCTION_DIR, "data")
 PDM_CACHE_FILEPATH = os.path.join(CACHE_DIR, "pdm_results.json")
-PDM_KEY_TERMS = ["zonamento", "usos do solo", "revisão do plano"]
+PDM_KEY_TERMS = [
+    # Termos fundamentais de ordenamento
+    "ordenamento do território",
+    "plano diretor municipal",
+    "zonamento",
+    "usos do solo",
+    "ocupação do solo",
+    
+    # Classificação e qualificação do solo
+    "solo urbano",
+    "solo urbanizável",
+    "solo rural",
+    "perímetro urbano",
+    
+    # Áreas e zonas específicas
+    "áreas urbanas",
+    "zonas residenciais",
+    "zonas industriais",
+    "zona agrícola",
+    "espaços verdes",
+    
+    # Parâmetros urbanísticos
+    "edificabilidade",
+    "índice de construção",
+    "densidade populacional",
+    "cércea",
+    
+    # Equipamentos e infraestruturas
+    "equipamentos coletivos",
+    "infraestruturas urbanas",
+    "rede viária",
+    
+    # Condicionantes e servidões
+    "servidões administrativas",
+    "condicionantes",
+    "reserva ecológica nacional",
+    "reserva agrícola nacional",
+    "domínio público",
+    
+    # Peças desenhadas
+    "planta de ordenamento",
+    "planta de condicionantes",
+    
+    # Regulamentação
+    "regulamento municipal",
+    "revisão do plano",
+    "alteração por adaptação",
+]
 
 # Global cache lock for thread-safe operations
 _cache_lock = Lock()
@@ -146,11 +193,12 @@ def save_filter_result(
 
 @task(name="Navigate to PDM URL")
 def navigate_to_pdm_url(
-    town_hall: TownHallDTO, max_concurrency: int = 12, max_pages: int = 400
+    town_hall: TownHallDTO, max_concurrency: int, max_pages: int = 400
 ) -> PDMCrawlResultDTO:
-    logger = get_run_logger()
     result = asyncio.run(
-        crawl_for_pdm_candidates(town_hall.url, max_concurrency, max_pages, logger)
+        crawl_for_pdm_candidates(
+            town_hall.url, max_concurrency, max_pages, get_run_logger()
+        )
     )
     return result
 
@@ -159,7 +207,7 @@ def navigate_to_pdm_url(
 def crawl_and_cache_pdm(
     town_hall: TownHallDTO,
     cache_filepath: str,
-    max_concurrency: int = 12,
+    max_concurrency: int,
     max_pages: int = 400,
 ) -> PDMCrawlResultDTO:
     """Crawl PDM and save result to cache immediately."""
@@ -173,6 +221,7 @@ def filter_and_cache_pdm_candidate(
     url: str,
     candidate_urls: list[str],
     cache_filepath: str,
+    max_concurrency: int,
 ) -> Optional[PDFContentDTO]:
     """Filter PDM candidates and save best candidate to cache immediately."""
     logger = get_run_logger()
@@ -181,7 +230,7 @@ def filter_and_cache_pdm_candidate(
         return None
 
     logger.info(f"Filtering {len(candidate_urls)} PDM candidates for: {url}")
-    best_candidate = filter_pdm_candidates(candidate_urls)
+    best_candidate = filter_pdm_candidates(candidate_urls, max_concurrency)
     save_filter_result(cache_filepath, url, best_candidate)
 
     if best_candidate:
@@ -239,16 +288,13 @@ async def fetch_pdf_content_async(
 
 @task(name="Fetch All PDFs Concurrently")
 async def fetch_all_pdfs_concurrently(
-    urls: list[str], max_concurrency: int = 10
+    urls: list[str], max_concurrency: int
 ) -> list[Optional[PDFContentDTO]]:
-    """Fetch multiple PDFs concurrently using httpx."""
-    from prefect import get_run_logger
 
-    logger = get_run_logger()
     limits = httpx.Limits(max_connections=max_concurrency)
 
-    async with httpx.AsyncClient(limits=limits, timeout=600.0) as client:
-        tasks = [fetch_pdf_content_async(url, client, logger) for url in urls]
+    async with httpx.AsyncClient(limits=limits) as client:
+        tasks = [fetch_pdf_content_async(url, client, get_run_logger()) for url in urls]
         return await asyncio.gather(*tasks)
 
 
@@ -271,8 +317,12 @@ def select_best_candidate(
 
 
 @task(name="Filter PDM Candidates")
-def filter_pdm_candidates(pdm_results: list[str]) -> Optional[PDFContentDTO]:
-    pdf_contents = asyncio.run(fetch_all_pdfs_concurrently(pdm_results))
+def filter_pdm_candidates(
+    pdm_results: list[str], max_concurrency: int
+) -> Optional[PDFContentDTO]:
+    pdf_contents = asyncio.run(
+        fetch_all_pdfs_concurrently(pdm_results, max_concurrency)
+    )
 
     valid_contents = [content for content in pdf_contents if content is not None]
 
@@ -380,10 +430,10 @@ def process_cached_complete_entries(
     return results
 
 
-@task(name="Wait for Crawl Results")
 def wait_for_crawl_results(
     crawl_futures: dict[str, Any],
     progress: tqdm,
+    max_concurrency: int,
 ) -> tuple[dict[str, PDMCrawlResultDTO], dict[str, Any]]:
     """Wait for all crawling tasks to complete and return results."""
     crawl_results = {}
@@ -395,7 +445,7 @@ def wait_for_crawl_results(
 
         # Immediately submit filtering task for this crawl result
         new_filter_futures[url] = filter_and_cache_pdm_candidate.submit(
-            url, crawl_result.candidate_pdf_urls, PDM_CACHE_FILEPATH
+            url, crawl_result.candidate_pdf_urls, PDM_CACHE_FILEPATH, max_concurrency
         )
 
         progress.update(1)
@@ -404,7 +454,6 @@ def wait_for_crawl_results(
     return crawl_results, new_filter_futures
 
 
-@task(name="Wait for Filter Results")
 def wait_for_filter_results(
     filter_futures: dict[str, Any],
     existing_results: dict[str, PDMCrawlResultDTO],
@@ -438,9 +487,10 @@ def wait_for_filter_results(
 
 
 @flow(name="Fetch PDM")
-def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
+def fetch_pdm(town_halls: list[TownHallDTO], max_concurrency: int) -> PDMFetchResultDTO:
     logger = get_run_logger()
     logger.info(f"Starting PDM fetch flow for {len(town_halls)} town halls")
+    logger.info(f"Max concurrency set to: {max_concurrency}")
 
     # Load cache and categorize work
     cached_entries = load_pdm_cache(PDM_CACHE_FILEPATH)
@@ -455,13 +505,15 @@ def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
 
     # Submit crawling tasks for town halls not in cache
     for th in to_crawl:
-        crawl_futures[th.url] = crawl_and_cache_pdm.submit(th, PDM_CACHE_FILEPATH)
+        crawl_futures[th.url] = crawl_and_cache_pdm.submit(
+            th, PDM_CACHE_FILEPATH, max_concurrency
+        )
 
     # Submit filtering tasks for already-crawled entries
     for url in to_filter:
         cache_entry = cached_entries[url]
         filter_futures[url] = filter_and_cache_pdm_candidate.submit(
-            url, cache_entry.candidate_urls, PDM_CACHE_FILEPATH
+            url, cache_entry.candidate_urls, PDM_CACHE_FILEPATH, max_concurrency
         )
 
     # Process results with progress tracking
@@ -473,7 +525,7 @@ def fetch_pdm(town_halls: list[TownHallDTO]) -> PDMFetchResultDTO:
 
         # Wait for crawling tasks and get new filtering futures
         crawl_results, new_filter_futures = wait_for_crawl_results(
-            crawl_futures, progress
+            crawl_futures, progress, max_concurrency
         )
         results.update(crawl_results)
         filter_futures.update(new_filter_futures)
