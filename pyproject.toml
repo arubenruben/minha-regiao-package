@@ -18,6 +18,7 @@
         "prefect>=3.6.21",
         "requests",
         "pandas",
+        "openpyxl",
         "beautifulsoup4",
         "pydantic",
         "environs",
