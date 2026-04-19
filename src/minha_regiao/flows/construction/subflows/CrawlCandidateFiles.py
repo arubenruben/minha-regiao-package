@@ -35,10 +35,8 @@ async def crawl_town_hall_website(
         nonlocal found_files
         async with semaphore:
             try:
-                result = await scraper.query(url)
-                html_content = result.get("body", "")
+                soup = await scraper.query(url)
                 
-                soup = BeautifulSoup(html_content, "html.parser")
                 links = [a.get("href") for a in soup.find_all("a", href=True)]
                 
                 for link in links:

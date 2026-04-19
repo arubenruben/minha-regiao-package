@@ -1,4 +1,5 @@
 import httpx
+from bs4 import BeautifulSoup
 
 class SmartProxy:
     def __init__(
@@ -20,7 +21,7 @@ class SmartProxy:
         self.source = source
 
     
-    async def query(self, url: str) -> dict:
+    async def query(self, url: str) -> BeautifulSoup:
         headers = {
             "Authorization": f"Basic {self.api_key}",
             "Content-Type": "application/json"
@@ -39,7 +40,9 @@ class SmartProxy:
             }
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0),
+        ) as client:
             response = await client.post(
                 "https://scraper.smartproxy.org/v1/query", 
                 headers=headers, 
@@ -48,4 +51,4 @@ class SmartProxy:
         
         response.raise_for_status()
         
-        return response.json()
+        return BeautifulSoup(response.text, "html.parser")
