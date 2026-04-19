@@ -4,12 +4,12 @@ from google import genai
 from bs4 import BeautifulSoup
 from instructor import from_genai
 from prefect import flow, task, cache_policies, get_run_logger
-from minha_regiao.flows.file_fetching.Settings import Settings
-from minha_regiao.flows.file_fetching.schema.Election import Election
-from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
+from minha_regiao.flows.elections.file_fetching.Settings import Settings
+from minha_regiao.flows.elections.file_fetching.schema.Election import Election
+from minha_regiao.flows.elections.file_fetching.schema.SegMaiRoot import SegMaiRoot
 from minha_regiao.exceptions.FileFetchingException import FileFetchingException
-from minha_regiao.flows.file_fetching.schema.ElectionHistory import ElectionHistory
-from minha_regiao.flows.file_fetching.prompts.TableHistoryPrompt import TableHistoryPrompt
+from minha_regiao.flows.elections.file_fetching.schema.ElectionHistory import ElectionHistory
+from minha_regiao.flows.elections.file_fetching.prompts.TableHistoryPrompt import TableHistoryPrompt
 
 
 settings = Settings()

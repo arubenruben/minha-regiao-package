@@ -3,10 +3,10 @@ import requests
 from typing import List, Dict
 from bs4 import BeautifulSoup
 from prefect import flow, task, get_run_logger
-from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
-from minha_regiao.flows.file_fetching.schema.ElectionFile import ElectionFile
+from minha_regiao.flows.elections.file_fetching.schema.SegMaiRoot import SegMaiRoot
+from minha_regiao.flows.elections.file_fetching.schema.ElectionFile import ElectionFile
 from minha_regiao.exceptions.FileFetchingException import FileFetchingException
-from minha_regiao.flows.file_fetching.schema.ElectionHistory import ElectionHistory
+from minha_regiao.flows.elections.file_fetching.schema.ElectionHistory import ElectionHistory
 
 
 @task(name="Fetch Election Pages")

@@ -1,4 +1,4 @@
-from minha_regiao.flows.file_fetching.schema.Schema import Schema
+from minha_regiao.flows.elections.file_fetching.schema.Schema import Schema
 
 class SegMaiRoot(Schema):
     presidential_elections_url: str

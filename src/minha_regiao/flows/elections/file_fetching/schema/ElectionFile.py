@@ -1,7 +1,7 @@
 from typing import Optional
 from pydantic import Field
-from minha_regiao.flows.file_fetching.schema.Schema import Schema
-from minha_regiao.flows.file_fetching.schema.Election import Election
+from minha_regiao.flows.elections.file_fetching.schema.Schema import Schema
+from minha_regiao.flows.elections.file_fetching.schema.Election import Election
 
 class ElectionFile(Schema):
     election: Election

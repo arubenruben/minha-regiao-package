@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Literal
 from pydantic import Field, field_validator
-from minha_regiao.flows.file_fetching.schema.Schema import Schema
+from minha_regiao.flows.elections.file_fetching.schema.Schema import Schema
 
 class Election(Schema):
     election_type: Literal[
