@@ -76,8 +76,12 @@ def parse_town_hall_data(df: pd.DataFrame) -> Sequence[City]:
         city_name = str(row["município"])
         district = str(row["distrito"])
         
+        website = str(row["sitio"])
+        if website.startswith("www."):
+            website = f"https://{website}"
+        
         town_hall = TownHall(
-            website=str(row["sitio"]),
+            website=website,
             nif=str(row["nif"]),
             president=str(row["nome presidente"]),
             address=str(row["morada"]),
