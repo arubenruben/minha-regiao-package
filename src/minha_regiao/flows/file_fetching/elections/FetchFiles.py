@@ -7,12 +7,12 @@ from bs4 import BeautifulSoup
 from prefect import flow, task, get_run_logger
 from tempfile import NamedTemporaryFile
 from huggingface_hub import login, file_exists, upload_file
-from minha_regiao.flows.file_fetching.Settings import Settings
-from minha_regiao.flows.file_fetching.schema.SegMaiRoot import SegMaiRoot
-from minha_regiao.flows.file_fetching.schema.ElectionFile import ElectionFile
+from minha_regiao.flows.file_fetching.elections.Settings import Settings
+from minha_regiao.flows.file_fetching.elections.schema.SegMaiRoot import SegMaiRoot
+from minha_regiao.flows.file_fetching.elections.schema.ElectionFile import ElectionFile
 from minha_regiao.exceptions.FileFetchingException import FileFetchingException
-from minha_regiao.flows.file_fetching.sub_flows.ParseSpreeadSheets import fetch_spreadsheet_files
-from minha_regiao.flows.file_fetching.sub_flows.ParseElectionHistorical import parse_election_historical
+from minha_regiao.flows.file_fetching.elections.sub_flows.ParseSpreeadSheets import fetch_spreadsheet_files
+from minha_regiao.flows.file_fetching.elections.sub_flows.ParseElectionHistorical import parse_election_historical
 
 settings = Settings()
 

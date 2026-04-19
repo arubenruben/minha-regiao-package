@@ -26,6 +26,7 @@
         "pgvector>=0.4.2",
         "sqlmodel",
         "psycopg[binary,pool]",
+        "pypdf"
     ]
 
     [project.optional-dependencies]
