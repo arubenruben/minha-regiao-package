@@ -12,9 +12,7 @@ class DecodoProxyStrategy(ScraperStrategy):
         headless: str = "html",
         proxy_pool: str = "standard",
         device_type: str = "desktop_chrome",
-        max_concurrency: int = 5,
     ):
-        super().__init__(max_concurrency=max_concurrency)
         self.api_key = api_key
         self.geo = geo
         self.locale = locale

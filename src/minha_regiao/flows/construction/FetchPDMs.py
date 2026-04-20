@@ -16,7 +16,7 @@ async def fetch_pdms():
     cities = get_cities()
 
     # crawler_strategy = SmartProxyStrategy(api_key=settings.smart_proxy_api_key)
-    crawler_strategy = LocalScraperStrategy(max_concurrency=50)
+    crawler_strategy = LocalScraperStrategy()
     pdm_files = await fetch_candidate_files(cities=cities, scraper=crawler_strategy)
 
 

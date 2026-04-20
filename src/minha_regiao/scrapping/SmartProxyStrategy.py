@@ -14,9 +14,7 @@ class SmartProxyStrategy(ScraperStrategy):
         format_list: list | None = None,
         screenshot_type: int = 1,
         source: str = "uni_scraper",
-        max_concurrency: int = 5,
     ):
-        super().__init__(max_concurrency=max_concurrency)
         self.api_key = api_key
         self.geo = geo
         self.locale = locale
