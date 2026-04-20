@@ -1,18 +1,21 @@
 import httpx
 from bs4 import BeautifulSoup
-from minha_regiao.scrapping.Scraper import ScraperStrategy
+from minha_regiao.scrapping.ScraperStrategy import ScraperStrategy
 
-class SmartProxy(ScraperStrategy):
+
+class SmartProxyStrategy(ScraperStrategy):
     def __init__(
-        self, 
-        api_key: str, 
-        geo: str = "PT", 
-        locale: str = "pt-PT", 
-        js_render: bool = True, 
-        format_list: list | None = None, 
-        screenshot_type: int = 1, 
-        source: str = "uni_scraper"
+        self,
+        api_key: str,
+        geo: str = "PT",
+        locale: str = "pt-PT",
+        js_render: bool = True,
+        format_list: list | None = None,
+        screenshot_type: int = 1,
+        source: str = "uni_scraper",
+        max_concurrency: int = 5,
     ):
+        super().__init__(max_concurrency=max_concurrency)
         self.api_key = api_key
         self.geo = geo
         self.locale = locale
@@ -21,34 +24,31 @@ class SmartProxy(ScraperStrategy):
         self.screenshot_type = screenshot_type
         self.source = source
 
-    async def query(self, url: str) -> BeautifulSoup:
+    async def _fetch(self, url: str) -> BeautifulSoup:
         headers = {
             "Authorization": f"Basic {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-        parameters = {            
+        parameters = {
             "geo": self.geo,
             "locale": self.locale,
             "js_render": self.js_render,
             "format_list": self.format_list,
             "screenshot_type": self.screenshot_type,
             "source": self.source,
-            "context": {
-                "url": url,
-                "screenshot_type": self.screenshot_type
-            }
+            "context": {"url": url, "screenshot_type": self.screenshot_type},
         }
-        
+
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(30.0),
         ) as client:
             response = await client.post(
-                "https://scraper.smartproxy.org/v1/query", 
-                headers=headers, 
-                json=parameters
+                "https://scraper.smartproxy.org/v1/query",
+                headers=headers,
+                json=parameters,
             )
-        
+
         response.raise_for_status()
-        
+
         return BeautifulSoup(response.text, "html.parser")
