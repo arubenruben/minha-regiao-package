@@ -56,6 +56,11 @@ async def crawl_single_page(
 
     try:
         soup = await scraper.query(url)
+
+        if soup is None:
+            logger.warning(f"Received no content for {url}")
+            return [], []
+
         links = [a.get("href") for a in soup.find_all("a", href=True)]
 
         same_domain_links = []

@@ -12,13 +12,17 @@ class LocalScraperStrategy(ScraperStrategy):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
 
-    async def _fetch(self, url: str) -> BeautifulSoup:
+    async def _fetch(self, url: str) -> Optional[BeautifulSoup]:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(self.timeout),
             headers=self.headers,
             follow_redirects=True,
         ) as client:
             response = await client.get(url)
+            
+            if response.status_code == 404:
+                return None
+            
             response.raise_for_status()
 
         return BeautifulSoup(response.text, "html.parser")

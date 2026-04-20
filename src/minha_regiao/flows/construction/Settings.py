@@ -7,6 +7,7 @@ ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 
 class Settings(BaseSettings):
-    smart_proxy_api_key: str
-
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8")
+
+    smart_proxy_api_key: str
+    decodo_api_key: str

@@ -1,4 +1,5 @@
 import httpx
+from typing import Optional
 from bs4 import BeautifulSoup
 from minha_regiao.scrapping.ScraperStrategy import ScraperStrategy
 
@@ -24,7 +25,7 @@ class SmartProxyStrategy(ScraperStrategy):
         self.screenshot_type = screenshot_type
         self.source = source
 
-    async def _fetch(self, url: str) -> BeautifulSoup:
+    async def _fetch(self, url: str) -> Optional[BeautifulSoup]:
         headers = {
             "Authorization": f"Basic {self.api_key}",
             "Content-Type": "application/json",
@@ -41,13 +42,16 @@ class SmartProxyStrategy(ScraperStrategy):
         }
 
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0),
+            timeout=httpx.Timeout(300.0),
         ) as client:
             response = await client.post(
                 "https://scraper.smartproxy.org/v1/query",
                 headers=headers,
                 json=parameters,
             )
+
+        if response.status_code == 404:
+            return None
 
         response.raise_for_status()
 
