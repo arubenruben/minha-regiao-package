@@ -187,8 +187,19 @@ async def read_cache_file(cache_path: str) -> Sequence[City]:
 async def write_cache_file(cache_path: str, city: City) -> None:
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
 
+    data = []
+
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            data = []
+
+    data.append(city.model_dump())
+
     with open(cache_path, "w", encoding="utf-8") as f:
-        json.dump([city.model_dump()], f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 @flow(name="Fetch Candidate Files")
