@@ -1,4 +1,6 @@
 import asyncio
+from typing import Sequence
+from minha_regiao.schema.City import City
 from prefect import flow, task, get_run_logger
 from minha_regiao.flows.construction.Settings import Settings
 from minha_regiao.scrapping.SmartProxyStrategy import SmartProxyStrategy
@@ -10,6 +12,10 @@ from minha_regiao.flows.construction.subflows.CrawlCandidateFiles import (
 
 settings = Settings()
 
+# @task(name="Find Best Candidate Files")
+# async def find_best_candidate_files(cities: Sequence[City]):
+#    raise NotImplementedError("This function is not implemented yet. It should analyze the candidate files and determine which ones are the best matches for PDMs.")
+
 
 @flow(name="Fetch PDMs")
 async def fetch_pdms():
@@ -17,7 +23,9 @@ async def fetch_pdms():
 
     # crawler_strategy = SmartProxyStrategy(api_key=settings.smart_proxy_api_key)
     crawler_strategy = LocalScraperStrategy()
-    pdm_files = await fetch_candidate_files(cities=cities, scraper=crawler_strategy)
+    cities_with_pdm_files = await fetch_candidate_files(
+        cities=cities, scraper=crawler_strategy
+    )
 
 
 if __name__ == "__main__":
