@@ -1,7 +1,8 @@
 import httpx
 from bs4 import BeautifulSoup
+from minha_regiao.scrapping.Scraper import ScraperStrategy
 
-class SmartProxy:
+class SmartProxy(ScraperStrategy):
     def __init__(
         self, 
         api_key: str, 
@@ -20,7 +21,6 @@ class SmartProxy:
         self.screenshot_type = screenshot_type
         self.source = source
 
-    
     async def query(self, url: str) -> BeautifulSoup:
         headers = {
             "Authorization": f"Basic {self.api_key}",
