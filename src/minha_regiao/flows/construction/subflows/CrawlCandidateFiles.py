@@ -1,13 +1,12 @@
 import asyncio
-from tqdm import tqdm
-from minha_regiao.schema.City import City
-from urllib.parse import urlparse, urljoin
-from typing import Sequence, Set, List, Tuple
+from dataclasses import dataclass, field
+from typing import Sequence, Set, List, Tuple, Optional, Any
+from urllib.parse import urlparse, urljoin, urlunparse
+
 from prefect import flow, task, get_run_logger
-from minha_regiao.flows.construction.Settings import Settings
+from minha_regiao.schema.City import City
 from minha_regiao.scrapping.ScraperStrategy import ScraperStrategy
 
-settings = Settings()
 
 PDM_KEYWORDS = [
     "pdm",
@@ -20,40 +19,46 @@ PDM_KEYWORDS = [
 ]
 
 
-@task(name="Check if PDM File")
+def normalize_url(url: str) -> str:
+    parsed = urlparse(url)
+
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path or "/"
+
+    if path != "/":
+        path = path.rstrip("/")
+
+    # Remove fragment, keep query
+    return urlunparse((scheme, netloc, path, "", parsed.query, ""))
+
+
 def is_pdm_file(url: str) -> bool:
-    """Check if a URL points to a potential PDM file."""
-    if not url.lower().endswith(".pdf"):
-        return False
-
-    filename = urlparse(url).path.lower().strip()
-
-    return any(keyword.strip().lower() in filename for keyword in PDM_KEYWORDS)
-
-
-@task(name="Check if URL is File")
-def is_file_url(url: str) -> bool:
-    """Check if a URL points to a file (has a non-HTML extension)."""
     path = urlparse(url).path.lower()
 
-    # Check if path has an extension
-    if "." not in path.split("/")[-1]:
+    if not path.endswith(".pdf"):
         return False
 
-    # HTML-like extensions that should be crawled
-    html_extensions = (".html", ".htm", ".php", ".asp", ".aspx", ".jsp")
+    return any(keyword in path for keyword in PDM_KEYWORDS)
 
-    # If it has an extension that's not HTML-like, it's a file
+
+def is_file_url(url: str) -> bool:
+    path = urlparse(url).path.lower()
+    last = path.split("/")[-1]
+
+    if "." not in last:
+        return False
+
+    html_extensions = (".html", ".htm", ".php", ".asp", ".aspx", ".jsp")
     return not any(path.endswith(ext) for ext in html_extensions)
 
 
-@task(name="Crawl Single Page")
 async def crawl_single_page(
-    url: str, domain: str, scraper: ScraperStrategy
+    url: str,
+    domain: str,
+    scraper: ScraperStrategy,
+    logger: Any,
 ) -> Tuple[List[str], List[str]]:
-    """Crawl a single page and return lists of (same_domain_links, pdm_files)."""
-    logger = get_run_logger()
-
     try:
         soup = await scraper.query(url)
 
@@ -61,71 +66,107 @@ async def crawl_single_page(
             logger.warning(f"Received no content for {url}")
             return [], []
 
-        links = [a.get("href") for a in soup.find_all("a", href=True)]
+        same_domain_links: Set[str] = set()
+        pdm_files: Set[str] = set()
 
-        same_domain_links = []
-        pdm_files = []
-
-        for link in tqdm(links, desc=f"Crawling {url}", leave=False):
-            if not isinstance(link, str):
+        for a in soup.find_all("a", href=True):
+            href = a.get("href")
+            if not isinstance(href, str):
                 continue
 
-            logger.debug(f"Processing link: {link} from {url}")
+            full_url = normalize_url(urljoin(url, href))
+            parsed = urlparse(full_url)
 
-            full_url = urljoin(url, link)
-            parsed_link = urlparse(full_url)
+            if parsed.netloc != domain:
+                continue
 
-            # Check if this is a PDM file
             if is_pdm_file(full_url):
                 logger.info(f"Found candidate PDM file: {full_url}")
-                pdm_files.append(full_url)
+                pdm_files.add(full_url)
+            elif not is_file_url(full_url):
+                same_domain_links.add(full_url)
 
-            # Collect links from same domain for further crawling (but not files)
-            elif parsed_link.netloc == domain and not is_file_url(full_url):
-                same_domain_links.append(full_url)
-
-        logger.debug(
-            f"Crawled {url}: found {len(same_domain_links)} links, {len(pdm_files)} PDM files"
-        )
-        return same_domain_links, pdm_files
+        return list(same_domain_links), list(pdm_files)
 
     except Exception as e:
         logger.error(f"Error crawling {url}: {e}")
         return [], []
 
 
+@dataclass
+class CrawlState:
+    domain: str
+    scraper: ScraperStrategy
+    logger: Any
+    queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    seen: Set[str] = field(default_factory=set)
+    found_files: Set[str] = field(default_factory=set)
+
+
+async def crawl_worker(worker_id: int, state: CrawlState) -> None:
+    while True:
+        url: Optional[str] = await state.queue.get()
+
+        if url is None:
+            state.queue.task_done()
+            return
+
+        try:
+            new_links, pdm_files = await crawl_single_page(
+                url=url,
+                domain=state.domain,
+                scraper=state.scraper,
+                logger=state.logger,
+            )
+
+            state.found_files.update(pdm_files)
+
+            for link in new_links:
+                # Prevent duplicates / cycles:
+                # mark as seen BEFORE yielding control
+                if link not in state.seen:
+                    state.seen.add(link)
+                    await state.queue.put(link)
+
+        except Exception as e:
+            state.logger.error(f"Worker {worker_id} failed on {url}: {e}")
+        finally:
+            state.queue.task_done()
+
+
 @task(name="Crawl Town Hall Website")
 async def crawl_town_hall_website(
-    town_hall_url: str, scraper: ScraperStrategy
+    town_hall_url: str,
+    scraper: ScraperStrategy,
+    max_concurrency: int = 10,
 ) -> Sequence[str]:
-    domain = urlparse(town_hall_url).netloc
-    visited: Set[str] = set()
-    to_visit: Set[str] = {town_hall_url}
-    found_files: Set[str] = set()
+    logger = get_run_logger()
 
-    # Crawl pages until no new pages to visit
-    while to_visit:
-        # Get batch of URLs to process
-        current_batch = list(to_visit)
-        to_visit.clear()
-        visited.update(current_batch)
+    start_url = normalize_url(town_hall_url)
+    domain = urlparse(start_url).netloc.lower()
 
-        # Crawl all URLs in batch concurrently
-        results = await asyncio.gather(
-            *[crawl_single_page(url, domain, scraper) for url in current_batch]
-        )
+    state = CrawlState(
+        domain=domain,
+        scraper=scraper,
+        logger=logger,
+    )
 
-        # Process results
-        for new_links, pdm_files in results:
-            # Add new PDM files
-            found_files.update(pdm_files)
+    state.seen.add(start_url)
+    await state.queue.put(start_url)
 
-            # Queue unvisited links for next batch
-            for link in new_links:
-                if link not in visited:
-                    to_visit.add(link)
+    workers = [
+        asyncio.create_task(crawl_worker(i, state))
+        for i in range(max_concurrency)
+    ]
 
-    return list(found_files)
+    await state.queue.join()
+
+    for _ in workers:
+        await state.queue.put(None)
+
+    await asyncio.gather(*workers)
+
+    return sorted(state.found_files)
 
 
 @flow(name="Fetch Candidate Files")
@@ -136,9 +177,12 @@ async def fetch_candidate_files(
     logger = get_run_logger()
     logger.info("Fetching candidate files...")
 
-    for city in tqdm(cities, desc="Crawling Town Hall Websites"):
+    # sequential across cities
+    for city in cities:
         websites = await crawl_town_hall_website(
-            town_hall_url=city.town_hall.website, scraper=scraper
+            town_hall_url=city.town_hall.website,
+            scraper=scraper,
+            max_concurrency=10,
         )
 
         if websites:
