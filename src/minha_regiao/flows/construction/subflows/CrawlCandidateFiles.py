@@ -143,7 +143,7 @@ async def crawl_worker(worker_id: int, state: CrawlState) -> None:
 async def crawl_town_hall_website(
     town_hall_url: str,
     scraper: ScraperStrategy,
-    max_concurrency: int = 128,
+    max_concurrency: int = 16,
 ) -> Sequence[str]:
     logger = get_run_logger()
 
@@ -178,9 +178,17 @@ async def read_cache_file(cache_path: str) -> Sequence[City]:
     if not os.path.exists(cache_path):
         return []
 
-    with open(cache_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return [City.model_validate(item) for item in data]
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return []
+
+    # if file is empty or invalid, return empty list
+    if not isinstance(data, list):
+        return []
+
+    return [City.model_validate(item) for item in data]
 
 
 @task(name="Write Cache File")
@@ -213,7 +221,7 @@ async def process_single_city(
     websites = await crawl_town_hall_website(
         town_hall_url=city.town_hall.website,
         scraper=scraper,
-        max_concurrency=128,
+        max_concurrency=64,
     )
 
     if websites:

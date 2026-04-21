@@ -7,7 +7,7 @@ from minha_regiao.scrapping.ScraperStrategy import ScraperStrategy
 class LocalScraperStrategy(ScraperStrategy):
     def __init__(
         self,
-        timeout: float = 30.0,
+        timeout: float = 300.0,
         headers: Optional[dict] = None,
     ):
         self.timeout = timeout
