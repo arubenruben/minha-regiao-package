@@ -12,6 +12,21 @@ class TownHall(Schema):
     email: str
     phone: str
 
+    pdm_file: Optional[str] = Field(
+        default=None,
+        description="URL to the PDM file for this town hall",
+    )
+
+    rmue_file: Optional[str] = Field(
+        default=None,
+        description="URL to the RMUE file for this town hall",
+    )
+
+    fees_file: Optional[str] = Field(
+        default=None,
+        description="URL to the Fees file for this town hall",
+    )
+
     pdm_candidate_files: Optional[Sequence[str]] = Field(
         default=None,
         description="List of URLs to candidate files for the PDM election",

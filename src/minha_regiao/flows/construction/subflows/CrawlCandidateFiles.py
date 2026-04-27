@@ -1,7 +1,7 @@
 import os
 import json
+import time
 import asyncio
-from tqdm import tqdm
 from dataclasses import dataclass, field
 from minha_regiao.schema.City import City
 from prefect import flow, task, get_run_logger
@@ -108,13 +108,16 @@ class CrawlState:
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     seen: Set[str] = field(default_factory=set)
     found_files: Set[str] = field(default_factory=set)
+    last_file_found_time: Optional[float] = None  # timestamp of last file found
+    should_stop: bool = False  # flag to signal early termination
+    has_existing_candidates: bool = False  # whether city already has candidates
 
 
 async def crawl_worker(worker_id: int, state: CrawlState) -> None:
     while True:
         url: Optional[str] = await state.queue.get()
 
-        if url is None:
+        if url is None or state.should_stop:
             state.queue.task_done()
             return
 
@@ -126,12 +129,30 @@ async def crawl_worker(worker_id: int, state: CrawlState) -> None:
                 logger=state.logger,
             )
 
-            state.found_files.update(pdm_files)
+            if pdm_files:
+                state.found_files.update(pdm_files)
+                # Reset timer when new files are found
+                if state.has_existing_candidates:
+                    state.last_file_found_time = time.time()
+            else:
+                # Check timeout if we have existing candidates and haven't found new files
+                if (
+                    state.has_existing_candidates
+                    and state.last_file_found_time is not None
+                ):
+                    elapsed = time.time() - state.last_file_found_time
+                    if elapsed > 600:  # 10 minutes = 600 seconds
+                        state.should_stop = True
+                        state.logger.info(
+                            f"Stopping crawl: {elapsed:.1f}s elapsed without finding new candidates"
+                        )
 
-            for link in new_links:
-                if link not in state.seen:
-                    state.seen.add(link)
-                    await state.queue.put(link)
+            # Only add new links if we're not stopping
+            if not state.should_stop:
+                for link in new_links:
+                    if link not in state.seen:
+                        state.seen.add(link)
+                        await state.queue.put(link)
 
         except Exception as e:
             state.logger.error(f"Worker {worker_id} failed on {url}: {e}")
@@ -143,7 +164,8 @@ async def crawl_worker(worker_id: int, state: CrawlState) -> None:
 async def crawl_town_hall_website(
     town_hall_url: str,
     scraper: ScraperStrategy,
-    max_concurrency: int = 16,
+    max_concurrency: int = 64,
+    has_existing_candidates: bool = False,
 ) -> Sequence[str]:
     logger = get_run_logger()
 
@@ -154,6 +176,8 @@ async def crawl_town_hall_website(
         domain=domain,
         scraper=scraper,
         logger=logger,
+        has_existing_candidates=has_existing_candidates,
+        last_file_found_time=time.time() if has_existing_candidates else None,
     )
 
     state.seen.add(start_url)
@@ -218,10 +242,13 @@ async def process_single_city(
     logger: Any,
 ) -> City:
     """Process a single city: crawl website and update cache."""
+    has_existing_candidates = bool(city.town_hall.pdm_candidate_files)
+
     websites = await crawl_town_hall_website(
         town_hall_url=city.town_hall.website,
         scraper=scraper,
         max_concurrency=64,
+        has_existing_candidates=has_existing_candidates,
     )
 
     if websites:
