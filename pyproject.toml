@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minha_regiao"
+dynamic = ["version"]
+description = "Minha Regiao"
+readme = "README.md"
+
+authors = [
+    {name = "Rúben Almeida", email = "almeidaruben35@gmail.com"}
+]
+requires-python = ">=3.12"
+
+dependencies = [
+    "tortoise-orm[asyncpg]>=1.1.7",
+    "prefect[docker]>=3.6.12",
+    "pydantic-settings>=2.12.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["minha_regiao", "minha_regiao.*"]
+namespaces = false
+
+[tool.setuptools_scm]

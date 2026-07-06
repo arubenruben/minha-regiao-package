@@ -1,0 +1,1 @@
+tortoise-orm[asyncpg]>=1.1.7

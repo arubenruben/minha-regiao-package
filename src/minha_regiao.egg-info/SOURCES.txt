@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/minha_regiao/__init__.py
+src/minha_regiao.egg-info/PKG-INFO
+src/minha_regiao.egg-info/SOURCES.txt
+src/minha_regiao.egg-info/dependency_links.txt
+src/minha_regiao.egg-info/requires.txt
+src/minha_regiao.egg-info/scm_version.json
+src/minha_regiao.egg-info/top_level.txt
+src/minha_regiao/database/DatabaseManager.py
+src/minha_regiao/database/__init__.py
+src/minha_regiao/flows/__init__.py

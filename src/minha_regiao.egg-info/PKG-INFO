@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: minha_regiao
+Version: 0.1.dev22+gf391ae0b7
+Summary: Minha Regiao
+Author-email: Rúben Almeida <almeidaruben35@gmail.com>
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: tortoise-orm[asyncpg]>=1.1.7
