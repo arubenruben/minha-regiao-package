@@ -7,3 +7,4 @@ class MAIWebpage(Schema):
     regional_assembly_url: str
     referendum_url: str
     full_historic_url: str
+    european_url: str
