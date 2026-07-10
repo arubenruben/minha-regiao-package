@@ -5,5 +5,4 @@ class MAIWebpage(Schema):
     parliament_url: str
     town_hall_url: str
     regional_assembly_url: str
-    referendum_url: str
     european_url: str

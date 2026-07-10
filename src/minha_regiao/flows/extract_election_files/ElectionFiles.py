@@ -15,7 +15,6 @@ from minha_regiao.flows.extract_election_files.sub_flows.parliament_elections.Pa
 from minha_regiao.flows.extract_election_files.sub_flows.presidential_elections.PresidentialElections import (
     presidential_elections,
 )
-from minha_regiao.flows.extract_election_files.sub_flows.referendums.Referendums import referendums
 from minha_regiao.flows.extract_election_files.sub_flows.regional_elections.RegionalElections import (
     regional_elections,
 )
@@ -32,7 +31,6 @@ URL_FIELD_MAP = {
     "AssembleiaRepublica": "parliament_url",
     "AutarquiasLocais": "town_hall_url",
     "Regionais": "regional_assembly_url",
-    "Referendos": "referendum_url",
     "ParlamentoEuropeu": "european_url",
 }
 
@@ -112,7 +110,6 @@ def fetch_election_files() -> list[Election]:
         european_elections(mai_webpage.european_url),
         parliament_elections(mai_webpage.parliament_url),
         presidential_elections(mai_webpage.president_url),
-        referendums(mai_webpage.referendum_url),
         regional_elections(mai_webpage.regional_assembly_url),
         town_hall_elections(mai_webpage.town_hall_url),
     ]

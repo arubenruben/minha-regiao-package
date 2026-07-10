@@ -9,7 +9,6 @@ ElectionType = Literal[
     "parliament",
     "town_hall",
     "regional",
-    "referendum",
     "european",
 ]
 
