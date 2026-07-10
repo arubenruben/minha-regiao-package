@@ -2,16 +2,13 @@ from tortoise.models import Model
 from tortoise import fields
 
 
-class City(Model):
+class District(Model):
     id = fields.IntField(primary_key=True)
     name = fields.CharField(max_length=255)
     wikipedia_url = fields.CharField(max_length=2048)
-    freguesias_pt_url = fields.CharField(max_length=2048)
-    ine_code = fields.CharField(max_length=10, unique=True)
-    district = fields.ForeignKeyField("models.District", related_name="cities")
 
     class Meta:
-        table = "city"
+        table = "district"
 
     def __str__(self) -> str:
         return self.name

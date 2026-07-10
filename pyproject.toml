@@ -36,6 +36,7 @@ extract_election_files = [
     "minha_regiao[scraping]",
     "datasets>=5.0.0",
     "huggingface-hub>=1.23.0",
+    "instructor[google-genai]"
 ]
 
 extract_cities = [
