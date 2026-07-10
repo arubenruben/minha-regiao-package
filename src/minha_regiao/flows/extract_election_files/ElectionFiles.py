@@ -9,9 +9,6 @@ from minha_regiao.flows.extract_election_files.schema.MAIWebpage import MAIWebpa
 from minha_regiao.flows.extract_election_files.sub_flows.european_elections.EuropeanElections import (
     european_elections,
 )
-from minha_regiao.flows.extract_election_files.sub_flows.historical_elections.HistoricalElections import (
-    historical_elections,
-)
 from minha_regiao.flows.extract_election_files.sub_flows.parliament_elections.ParliamentElections import (
     parliament_elections,
 )
@@ -36,7 +33,6 @@ URL_FIELD_MAP = {
     "AutarquiasLocais": "town_hall_url",
     "Regionais": "regional_assembly_url",
     "Referendos": "referendum_url",
-    "HistoricoEleicoes": "full_historic_url",
     "ParlamentoEuropeu": "european_url",
 }
 
@@ -114,7 +110,6 @@ def fetch_election_files() -> list[Election]:
 
     results = [
         european_elections(mai_webpage.european_url),
-        historical_elections(mai_webpage.full_historic_url),
         parliament_elections(mai_webpage.parliament_url),
         presidential_elections(mai_webpage.president_url),
         referendums(mai_webpage.referendum_url),
