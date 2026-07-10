@@ -2,7 +2,6 @@ from urllib.parse import urljoin
 
 from scrapling.fetchers import StealthyFetcher
 from prefect import flow, task, get_run_logger
-from prefect.task_runners import ThreadPoolTaskRunner
 from minha_regiao.flows.extract_election_files.Settings import settings
 from minha_regiao.flows.extract_election_files.schema.MAIWebpage import MAIWebpage
 from minha_regiao.flows.extract_election_files.sub_flows.european_elections.EuropeanElections import (
@@ -24,17 +23,6 @@ from minha_regiao.flows.extract_election_files.sub_flows.regional_elections.Regi
 from minha_regiao.flows.extract_election_files.sub_flows.town_hall_elections_files.TownHallElections import (
     town_hall_elections,
 )
-
-# Maps each sub-flow to the MAIWebpage field holding the URL it should receive.
-SUB_FLOWS = [
-    (european_elections, "european_url"),
-    (historical_elections, "full_historic_url"),
-    (parliament_elections, "parliament_url"),
-    (presidential_elections, "president_url"),
-    (referendums, "referendum_url"),
-    (regional_elections, "regional_assembly_url"),
-    (town_hall_elections, "town_hall_url"),
-]
 
 # Maps a keyword found in an anchor's href path segments to the MAIWebpage
 # field it fills. The page lists more categories (e.g. Autárquicas
@@ -84,7 +72,7 @@ def build_mai_webpage(fields: dict[str, str]) -> MAIWebpage:
 
 
 @flow(name="fetch_election_files", description="Fetch election files from the specified base URL.")
-def fetch_election_files() -> MAIWebpage:
+def fetch_election_files() -> list[str]:
     logger = get_run_logger()
 
     logger.info(f"Fetching election files from {settings.seg_mai_base_url}")
@@ -92,32 +80,17 @@ def fetch_election_files() -> MAIWebpage:
     page = fetch_mai_page(settings.seg_mai_base_url)
     hrefs = extract_subsite_links(page)
     fields = map_links_to_fields(hrefs, settings.seg_mai_base_url)
+    mai_webpage = build_mai_webpage(fields)
 
-    return build_mai_webpage(fields)
-
-
-@task(name="run_sub_flow")
-def run_sub_flow(sub_flow, url: str) -> str:
-    return sub_flow(url)
-
-
-@flow(
-    name="extract_election_files",
-    description="Fan out to every election sub-flow in parallel and reduce their results.",
-    task_runner=ThreadPoolTaskRunner(),
-)
-def extract_election_files(mai_webpage: MAIWebpage) -> list[str]:
-    logger = get_run_logger()
-
-    # map: submit a task per sub-flow, passing its corresponding URL, so they run
-    # concurrently on the thread pool task runner
-    futures = [
-        run_sub_flow.submit(sub_flow, getattr(mai_webpage, field_name))
-        for sub_flow, field_name in SUB_FLOWS
+    results = [
+        european_elections(mai_webpage.european_url),
+        historical_elections(mai_webpage.full_historic_url),
+        parliament_elections(mai_webpage.parliament_url),
+        presidential_elections(mai_webpage.president_url),
+        referendums(mai_webpage.referendum_url),
+        regional_elections(mai_webpage.regional_assembly_url),
+        town_hall_elections(mai_webpage.town_hall_url),
     ]
-
-    # reduce: wait for each sub-flow to finish and collect its result
-    results = [future.result() for future in futures]
 
     logger.info(f"Collected {len(results)} sub-flow results")
 
@@ -125,5 +98,4 @@ def extract_election_files(mai_webpage: MAIWebpage) -> list[str]:
 
 
 if __name__ == "__main__":
-    election_files = fetch_election_files()
-    extract_election_files(election_files)
+    fetch_election_files()
