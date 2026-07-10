@@ -1,4 +1,5 @@
 from prefect import flow, task, get_run_logger
+from prefect.cache_policies import NO_CACHE
 from scrapling.fetchers import StealthyFetcher
 
 from minha_regiao.flows.extract_election_files.schema.Election import Election
@@ -22,7 +23,7 @@ def fetch_presidential_page(url: str):
     return page
 
 
-@task(name="extract_presidential_file_links")
+@task(name="extract_presidential_file_links", cache_policy=NO_CACHE)
 def extract_presidential_file_links(page) -> list[str]:
     logger = get_run_logger()
 
