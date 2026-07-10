@@ -14,9 +14,39 @@ authors = [
 requires-python = ">=3.12"
 
 dependencies = [
-    "tortoise-orm[asyncpg]>=1.1.7",
-    "prefect[docker]>=3.6.12",
+    "pydantic>=2.13.4",
     "pydantic-settings>=2.12.0",
+    "httpx>=0.28.1"
+]
+
+[project.optional-dependencies]
+
+scraping = [
+    "scrapling[fetchers]>=0.4.10",
+    "beautifulsoup4>=4.15.0"
+]
+
+prefect = [
+    "prefect[docker]>=3.6.12",
+]
+
+extract_election_files = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+]
+
+extract_cities = [
+
+]
+
+database = [
+    "tortoise-orm[asyncpg]>=1.1.7",
+]
+
+dev = [
+    "minha_regiao[database,extract_cities,extract_election_files,prefect,scraping]"
 ]
 
 [tool.setuptools.packages.find]
