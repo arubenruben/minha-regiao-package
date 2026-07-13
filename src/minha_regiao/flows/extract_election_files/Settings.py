@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     )
     
     seg_mai_base_url: str
-    #hf_api_token: str
-    #hf_dataset_name: str
+    hf_api_key: str
+    hf_dataset_repo_id: str
 
 settings = Settings()

@@ -1,0 +1,37 @@
+from pydantic import model_validator
+
+from minha_regiao.flows.extract_election_files.schema.Election import Election, ElectionType, SubType
+from minha_regiao.flows.extract_election_files.schema.ElectionMetadata import ElectionMetadata, PresidentialRound
+from minha_regiao.flows.extract_election_files.schema.Schema import Schema
+
+
+class StructuredElection(Schema):
+    type: ElectionType
+    sub_type: SubType | None = None
+    year: int
+    url: str
+    filename: str
+    name: str
+    round: PresidentialRound | None = None
+
+    @model_validator(mode="after")
+    def _validate_round(self) -> "StructuredElection":
+        if self.type == "presidential":
+            if self.round is None:
+                raise ValueError("round is required for type 'presidential'")
+        elif self.round is not None:
+            raise ValueError(f"round must be None for type '{self.type}'")
+
+        return self
+
+    @classmethod
+    def from_election(cls, election: Election, metadata: ElectionMetadata) -> "StructuredElection":
+        return cls(
+            type=election.type,
+            sub_type=election.sub_type,
+            year=election.year,
+            url=election.url,
+            filename=election.filename,
+            name=metadata.name,
+            round=metadata.round,
+        )
