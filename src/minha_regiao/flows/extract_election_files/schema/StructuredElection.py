@@ -10,6 +10,7 @@ class StructuredElection(Schema):
     sub_type: SubType | None = None
     year: int
     url: str
+    raw_file_url: str | None = None
     filename: str
     name: str
     round: PresidentialRound | None = None

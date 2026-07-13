@@ -1,6 +1,7 @@
 from urllib.parse import urljoin
 
 from huggingface_hub import HfApi
+from huggingface_hub.errors import HfHubHTTPError
 from scrapling.fetchers import StealthyFetcher
 from prefect import flow, task, get_run_logger
 from prefect.cache_policies import NO_CACHE
@@ -38,6 +39,19 @@ URL_FIELD_MAP = {
     "Regionais": "regional_assembly_url",
     "ParlamentoEuropeu": "european_url",
 }
+
+
+@task(name="ensure_huggingface_login")
+def ensure_huggingface_login(api: HfApi) -> None:
+    logger = get_run_logger()
+
+    try:
+        user = api.whoami()
+    except HfHubHTTPError as error:
+        logger.error("Hugging Face authentication failed")
+        raise RuntimeError("Hugging Face authentication failed: check HF_API_KEY") from error
+
+    logger.info(f"Authenticated with Hugging Face as {user['name']}")
 
 
 @task(name="fetch_mai_page")
@@ -122,8 +136,10 @@ def ensure_hf_dataset_repo(api: HfApi, repo_id: str) -> None:
 
 
 @task(name="upload_raw_election_files")
-def upload_raw_election_files(api: HfApi, repo_id: str, elections: list[StructuredElection]) -> None:
-    ElectionRawFileUploader(api, repo_id).upload(elections)
+def upload_raw_election_files(
+    api: HfApi, repo_id: str, elections: list[StructuredElection]
+) -> list[StructuredElection]:
+    return ElectionRawFileUploader(api, repo_id).upload(elections)
 
 
 @task(name="publish_election_dataset")
@@ -134,6 +150,9 @@ def publish_election_dataset(repo_id: str, token: str, elections: list[Structure
 @flow(name="fetch_election_files", description="Fetch election files from the specified base URL.")
 def fetch_election_files() -> list[StructuredElection]:
     logger = get_run_logger()
+
+    api = HfApi(token=settings.hf_api_key)
+    ensure_huggingface_login(api)
 
     logger.info(f"Fetching election files from {settings.seg_mai_base_url}")
 
@@ -153,12 +172,11 @@ def fetch_election_files() -> list[StructuredElection]:
     elections = reduce_election_files(results)
     structured = structure_election_files(elections)
 
-    api = HfApi(token=settings.hf_api_key)
     ensure_hf_dataset_repo(api, settings.hf_dataset_repo_id)
-    upload_raw_election_files(api, settings.hf_dataset_repo_id, structured)
-    publish_election_dataset(settings.hf_dataset_repo_id, settings.hf_api_key, structured)
+    structured_with_raw_files = upload_raw_election_files(api, settings.hf_dataset_repo_id, structured)
+    publish_election_dataset(settings.hf_dataset_repo_id, settings.hf_api_key, structured_with_raw_files)
 
-    return structured
+    return structured_with_raw_files
 
 
 if __name__ == "__main__":
