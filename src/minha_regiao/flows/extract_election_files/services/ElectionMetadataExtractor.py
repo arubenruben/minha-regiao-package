@@ -1,10 +1,25 @@
+import logging
+
+from minha_regiao.flows.extract_election_files.prompt.ElectionMetadataPrompt import ElectionMetadataPrompt
 from minha_regiao.flows.extract_election_files.schema.Election import Election
 from minha_regiao.flows.extract_election_files.schema.ElectionMetadata import ElectionMetadata
+from minha_regiao.llm.GeminiStructuredClient import GeminiStructuredClient
+
+logger = logging.getLogger(__name__)
 
 
-def extract_election_metadata(election: Election) -> ElectionMetadata:
-    """Structures the parts of an Election that aren't derivable from its filename/url via regex (name, presidential round).
+class ElectionMetadataExtractor:
+    """Structures the free-text parts of Election records (name, presidential round) with Gemini,
+    issuing one request per election, run concurrently."""
 
-    Stub — not yet wired to an LLM/instructor client.
-    """
-    raise NotImplementedError("LLM-backed election metadata extraction is not implemented yet")
+    def __init__(self, api_key: str, model: str):
+        self._client = GeminiStructuredClient(api_key, model)
+
+    async def extract(self, elections: list[Election]) -> list[ElectionMetadata]:
+        if not elections:
+            return []
+
+        logger.info(f"Requesting structured metadata for {len(elections)} elections")
+
+        prompts = [ElectionMetadataPrompt.build(election) for election in elections]
+        return await self._client.generate_batch(prompts, ElectionMetadata)

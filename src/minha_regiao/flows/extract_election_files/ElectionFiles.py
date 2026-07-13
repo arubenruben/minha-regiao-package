@@ -1,3 +1,4 @@
+import asyncio
 from urllib.parse import urljoin
 
 from huggingface_hub import HfApi
@@ -10,7 +11,7 @@ from minha_regiao.flows.extract_election_files.schema.Election import Election
 from minha_regiao.flows.extract_election_files.schema.MAIWebpage import MAIWebpage
 from minha_regiao.flows.extract_election_files.schema.StructuredElection import StructuredElection
 from minha_regiao.flows.extract_election_files.services.ElectionDatasetPublisher import ElectionDatasetPublisher
-from minha_regiao.flows.extract_election_files.services.ElectionMetadataExtractor import extract_election_metadata
+from minha_regiao.flows.extract_election_files.services.ElectionMetadataExtractor import ElectionMetadataExtractor
 from minha_regiao.flows.extract_election_files.services.ElectionRawFileUploader import ElectionRawFileUploader
 from minha_regiao.flows.extract_election_files.sub_flows.european_elections.EuropeanElections import (
     european_elections,
@@ -39,6 +40,8 @@ URL_FIELD_MAP = {
     "Regionais": "regional_assembly_url",
     "ParlamentoEuropeu": "european_url",
 }
+
+HF_DATASET_CONFIG_NAME = "raw_election_files"
 
 
 @task(name="ensure_huggingface_login")
@@ -119,8 +122,12 @@ def reduce_election_files(results: list[list[Election]]) -> list[Election]:
 def structure_election_files(elections: list[Election]) -> list[StructuredElection]:
     logger = get_run_logger()
 
+    extractor = ElectionMetadataExtractor(settings.google_api_key, settings.gemini_model)
+    metadata = asyncio.run(extractor.extract(elections))
+
     structured = [
-        StructuredElection.from_election(election, extract_election_metadata(election)) for election in elections
+        StructuredElection.from_election(election, election_metadata)
+        for election, election_metadata in zip(elections, metadata)
     ]
 
     logger.info(f"Structured {len(structured)} election records")
@@ -143,8 +150,8 @@ def upload_raw_election_files(
 
 
 @task(name="publish_election_dataset")
-def publish_election_dataset(repo_id: str, token: str, elections: list[StructuredElection]) -> None:
-    ElectionDatasetPublisher(repo_id, token).publish(elections)
+def publish_election_dataset(repo_id: str, token: str, config_name: str, elections: list[StructuredElection]) -> None:
+    ElectionDatasetPublisher(repo_id, token, config_name).publish(elections)
 
 
 @flow(name="fetch_election_files", description="Fetch election files from the specified base URL.")
@@ -174,7 +181,9 @@ def fetch_election_files() -> list[StructuredElection]:
 
     ensure_hf_dataset_repo(api, settings.hf_dataset_repo_id)
     structured_with_raw_files = upload_raw_election_files(api, settings.hf_dataset_repo_id, structured)
-    publish_election_dataset(settings.hf_dataset_repo_id, settings.hf_api_key, structured_with_raw_files)
+    publish_election_dataset(
+        settings.hf_dataset_repo_id, settings.hf_api_key, HF_DATASET_CONFIG_NAME, structured_with_raw_files
+    )
 
     return structured_with_raw_files
 

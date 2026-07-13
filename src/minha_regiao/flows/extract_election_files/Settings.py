@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     )
     
     seg_mai_base_url: str
+    google_api_key: str
+    gemini_model: str
     hf_api_key: str
     hf_dataset_repo_id: str
 

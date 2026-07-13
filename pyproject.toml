@@ -31,12 +31,17 @@ prefect = [
     "prefect[docker]>=3.6.12",
 ]
 
+llm = [
+    "google-genai>=2.11.0",
+    "langchain-core>=1.4.9",
+]
+
 extract_election_files = [
     "minha_regiao[prefect]",
     "minha_regiao[scraping]",
+    "minha_regiao[llm]",
     "datasets>=5.0.0",
     "huggingface-hub>=1.23.0",
-    "instructor[google-genai]"
 ]
 
 extract_cities = [
