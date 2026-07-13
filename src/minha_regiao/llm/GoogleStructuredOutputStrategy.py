@@ -8,6 +8,8 @@ from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel
 
+from minha_regiao.llm.StructuredOutputStrategy import StructuredOutputStrategy
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
@@ -39,9 +41,9 @@ class _RateLimiter:
             self._timestamps.popleft()
 
 
-class GeminiStructuredClient:
+class GoogleStructuredOutputStrategy(StructuredOutputStrategy):
     """Wraps the Gemini API for structured-output generation (a prompt in, a validated Pydantic
-    model out). Reusable across the package — not tied to any one flow.
+    model out).
 
     Reasoning is minimal by default (`thinking_level=MINIMAL`): callers that want more can pass
     a higher level explicitly, up to MEDIUM — HIGH is disallowed to keep latency/cost bounded.
@@ -96,11 +98,6 @@ class GeminiStructuredClient:
                 await asyncio.sleep(delay)
 
         raise AssertionError("unreachable")  # loop always returns or raises
-
-    async def generate_batch(self, prompts: list[str], response_model: type[T]) -> list[T]:
-        """Runs `generate` for every prompt concurrently, returning results in the same order as
-        `prompts`. Concurrency is safe here since `generate` itself throttles to the shared quota."""
-        return list(await asyncio.gather(*(self.generate(prompt, response_model) for prompt in prompts)))
 
     @staticmethod
     def _retry_delay_seconds(error: errors.ClientError) -> float | None:

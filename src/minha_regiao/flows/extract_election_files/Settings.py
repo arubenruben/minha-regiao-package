@@ -10,8 +10,11 @@ class Settings(BaseSettings):
     )
     
     seg_mai_base_url: str
-    google_api_key: str
-    gemini_model: str
+    openrouter_api_key: str
+    openrouter_model: str
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    google_api_key: str | None = None
+    gemini_model: str | None = None
     hf_api_key: str
     hf_dataset_repo_id: str
 

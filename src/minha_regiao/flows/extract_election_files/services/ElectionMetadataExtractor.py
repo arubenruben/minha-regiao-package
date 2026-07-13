@@ -3,17 +3,17 @@ import logging
 from minha_regiao.flows.extract_election_files.prompt.ElectionMetadataPrompt import ElectionMetadataPrompt
 from minha_regiao.flows.extract_election_files.schema.Election import Election
 from minha_regiao.flows.extract_election_files.schema.ElectionMetadata import ElectionMetadata
-from minha_regiao.llm.GeminiStructuredClient import GeminiStructuredClient
+from minha_regiao.llm.StructuredOutputStrategy import StructuredOutputStrategy
 
 logger = logging.getLogger(__name__)
 
 
 class ElectionMetadataExtractor:
-    """Structures the free-text parts of Election records (name, presidential round) with Gemini,
+    """Structures the free-text parts of Election records (name, presidential round) via an LLM,
     issuing one request per election, run concurrently."""
 
-    def __init__(self, api_key: str, model: str):
-        self._client = GeminiStructuredClient(api_key, model)
+    def __init__(self, strategy: StructuredOutputStrategy):
+        self._strategy = strategy
 
     async def extract(self, elections: list[Election]) -> list[ElectionMetadata]:
         if not elections:
@@ -22,4 +22,4 @@ class ElectionMetadataExtractor:
         logger.info(f"Requesting structured metadata for {len(elections)} elections")
 
         prompts = [ElectionMetadataPrompt.build(election) for election in elections]
-        return await self._client.generate_batch(prompts, ElectionMetadata)
+        return await self._strategy.generate_batch(prompts, ElectionMetadata)

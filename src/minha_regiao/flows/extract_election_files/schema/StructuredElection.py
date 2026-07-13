@@ -20,8 +20,8 @@ class StructuredElection(Schema):
         if self.type == "presidential":
             if self.round is None:
                 raise ValueError("round is required for type 'presidential'")
-        elif self.round is not None:
-            raise ValueError(f"round must be None for type '{self.type}'")
+        else:
+            self.round = None
 
         return self
 

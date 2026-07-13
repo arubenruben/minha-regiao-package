@@ -19,8 +19,9 @@ Given this election:
 Infer:
 - name: a human-readable Portuguese election name, e.g. "Eleições Legislativas 2024", \
 "Eleição Presidencial 2026 - 2ª Volta".
-- round: only if type == "presidential", either "first_round" or "second_round" — infer this \
-from filename/url hints (e.g. "Sufrágio", "Volta", "2º"). Leave it unset for every other type.
+- round: only if type == "presidential", either "first_round" or "second_round". Presidential \
+elections default to "first_round" — only use "second_round" if the filename/url explicitly \
+indicates one (e.g. "2ª Volta", "Segunda Volta", "2º Sufrágio"). Leave it unset for every other type.
 """
     )
 

@@ -13,6 +13,7 @@ from minha_regiao.flows.extract_election_files.schema.StructuredElection import 
 from minha_regiao.flows.extract_election_files.services.ElectionDatasetPublisher import ElectionDatasetPublisher
 from minha_regiao.flows.extract_election_files.services.ElectionMetadataExtractor import ElectionMetadataExtractor
 from minha_regiao.flows.extract_election_files.services.ElectionRawFileUploader import ElectionRawFileUploader
+from minha_regiao.llm.OpenAIStructuredOutputStrategy import OpenAIStructuredOutputStrategy
 from minha_regiao.flows.extract_election_files.sub_flows.european_elections.EuropeanElections import (
     european_elections,
 )
@@ -122,7 +123,10 @@ def reduce_election_files(results: list[list[Election]]) -> list[Election]:
 def structure_election_files(elections: list[Election]) -> list[StructuredElection]:
     logger = get_run_logger()
 
-    extractor = ElectionMetadataExtractor(settings.google_api_key, settings.gemini_model)
+    strategy = OpenAIStructuredOutputStrategy(
+        settings.openrouter_api_key, settings.openrouter_model, base_url=settings.openrouter_base_url
+    )
+    extractor = ElectionMetadataExtractor(strategy)
     metadata = asyncio.run(extractor.extract(elections))
 
     structured = [
