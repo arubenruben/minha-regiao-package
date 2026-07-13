@@ -45,6 +45,7 @@ extract_cities = [
 
 database = [
     "tortoise-orm[asyncpg]>=1.1.7",
+    "alembic>=1.18.5",
 ]
 
 dev = [
