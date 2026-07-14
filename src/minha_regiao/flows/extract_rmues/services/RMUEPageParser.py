@@ -9,6 +9,10 @@ from minha_regiao.flows.extract_rmues.schema.RMUERegulation import RegulationDoc
 URBANIZATION_LABEL = "Regulamento Municipal da Urbanização e da Edificação"
 FEES_LABEL = "Regulamento de Taxas e Cauções por Operações Urbanísticas"
 
+# On a DR detail page (e.g. https://diariodarepublica.pt/dr/detalhe/regulamento/...),
+# the actual PDF is linked from an anchor carrying this exact title attribute.
+PDF_LINK_TITLE = "Documento em formato PDF"
+
 
 def parse_rmue_regulations(page: Selector) -> list[RMUERegulation]:
     entries: list[RMUERegulation] = []
@@ -52,3 +56,12 @@ def parse_rmue_regulations(page: Selector) -> list[RMUERegulation]:
         entries.append(current)
 
     return entries
+
+
+def parse_pdf_url(detail_page: Selector) -> str | None:
+    links = detail_page.css(f'a[title="{PDF_LINK_TITLE}"]')
+    if not links:
+        return None
+
+    href = links[0].attrib.get("href")
+    return href.strip() if href else None

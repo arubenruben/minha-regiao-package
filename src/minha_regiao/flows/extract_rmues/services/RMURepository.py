@@ -5,8 +5,11 @@ from minha_regiao.entity.City import City
 from minha_regiao.entity.FeeRegulation import FeeRegulation
 from minha_regiao.entity.RMUE import RMUE
 from minha_regiao.flows.extract_cities.services.FuzzyMatch import resolve_name
+from minha_regiao.flows.extract_rmues.schema.PendingDocument import PendingDocument
 from minha_regiao.flows.extract_rmues.schema.RMUERegulation import RegulationDocument, RMUERegulation
 from minha_regiao.flows.extract_rmues.services.RegulationMetadata import extract_year, is_complete
+
+_MODELS_BY_TABLE: dict[str, type[Model]] = {"rmue": RMUE, "fee_regulation": FeeRegulation}
 
 
 async def _persist_documents(model: type[Model], city: City, documents: list[RegulationDocument]) -> tuple[int, list[str]]:
@@ -58,3 +61,27 @@ async def persist_rmue_regulations(db_url: str, entries: list[RMUERegulation]) -
             skipped_documents.extend(rmue_skipped + fee_skipped)
 
     return persisted, unmatched_cities, skipped_documents
+
+
+async def find_documents_missing_pdf_url(db_url: str) -> list[PendingDocument]:
+    async with connection(db_url):
+        pending = []
+        for table, model in _MODELS_BY_TABLE.items():
+            async for row in model.filter(pdf_url=None):
+                pending.append(PendingDocument(table=table, id=row.id, dre_url=row.dre_url))
+
+    return pending
+
+
+async def update_pdf_urls(db_url: str, documents: list[PendingDocument]) -> int:
+    async with connection(db_url):
+        updated = 0
+        for document in documents:
+            if document.pdf_url is None:
+                continue
+
+            model = _MODELS_BY_TABLE[document.table]
+            await model.filter(id=document.id).update(pdf_url=document.pdf_url)
+            updated += 1
+
+    return updated
