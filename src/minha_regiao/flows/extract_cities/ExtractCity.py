@@ -10,7 +10,12 @@ from minha_regiao.flows.extract_cities.Settings import settings
 from minha_regiao.flows.extract_cities.schema.CityContacts import CityContacts
 from minha_regiao.flows.extract_cities.schema.MunicipalContact import MunicipalContact
 from minha_regiao.flows.extract_cities.services.CityRepository import persist_cities
-from minha_regiao.flows.extract_cities.services.IneCodeLookup import extract_ine_codes_by_municipality, match_ine_code
+from minha_regiao.flows.extract_cities.services.FuzzyMatch import resolve_name
+from minha_regiao.flows.extract_cities.services.IneCodeLookup import (
+    extract_ambiguous_ine_codes_by_municipality,
+    extract_ine_codes_by_municipality,
+    match_ine_code,
+)
 from minha_regiao.flows.extract_cities.services.MunicipalContactParser import parse_municipal_contact_row
 
 @task(name="download_election_results")
@@ -30,13 +35,17 @@ def download_election_results(repo_id: str, filename: str) -> Path:
 
 
 @task(name="build_ine_code_lookup")
-def build_ine_code_lookup(election_results_path: Path) -> dict[str, str]:
+def build_ine_code_lookup(election_results_path: Path) -> tuple[dict[str, str], dict[str, list[str]]]:
     logger = get_run_logger()
 
     ine_codes_by_municipality = extract_ine_codes_by_municipality(election_results_path)
+    ambiguous_ine_codes_by_municipality = extract_ambiguous_ine_codes_by_municipality(election_results_path)
 
-    logger.info(f"Built INE code lookup for {len(ine_codes_by_municipality)} municipalities")
-    return ine_codes_by_municipality
+    logger.info(
+        f"Built INE code lookup for {len(ine_codes_by_municipality)} municipalities "
+        f"({len(ambiguous_ine_codes_by_municipality)} ambiguous names)"
+    )
+    return ine_codes_by_municipality, ambiguous_ine_codes_by_municipality
 
 
 @task(name="fetch_contacts_page")
@@ -80,13 +89,17 @@ def index_city_contacts(
     assemblies_by_municipality = {assembly.municipality: assembly for assembly in municipal_assemblies}
 
     contacts = []
-    
+
     for town_hall in town_halls:
-        assembly = assemblies_by_municipality.pop(town_hall.municipality, None)
-        
+        assembly_name = resolve_name(town_hall.municipality, assemblies_by_municipality)
+        assembly = assemblies_by_municipality.pop(assembly_name, None) if assembly_name else None
+
         if assembly is None:
             logger.warning(f"No municipal assembly contact found for '{town_hall.municipality}'")
             continue
+
+        if assembly_name != town_hall.municipality:
+            logger.info(f"Fuzzy matched town hall '{town_hall.municipality}' to municipal assembly '{assembly_name}'")
 
         contacts.append(
             CityContacts(municipality=town_hall.municipality, town_hall=town_hall, municipal_assembly=assembly)
@@ -100,13 +113,17 @@ def index_city_contacts(
 
 
 @task(name="attach_ine_codes")
-def attach_ine_codes(contacts: list[CityContacts], ine_codes_by_municipality: dict[str, str]) -> list[CityContacts]:
+def attach_ine_codes(
+    contacts: list[CityContacts],
+    ine_codes_by_municipality: dict[str, str],
+    ambiguous_ine_codes_by_municipality: dict[str, list[str]],
+) -> list[CityContacts]:
     logger = get_run_logger()
 
     updated = []
     unmatched = []
     for contact in contacts:
-        ine_code = match_ine_code(contact.municipality, ine_codes_by_municipality)
+        ine_code = match_ine_code(contact.municipality, ine_codes_by_municipality, ambiguous_ine_codes_by_municipality)
         if ine_code is None:
             unmatched.append(contact.municipality)
         updated.append(contact.model_copy(update={"ine_code": ine_code}))
@@ -154,8 +171,10 @@ def extract_cities(hf_dataset_repo_id: str, presidential_election_results_filena
 
     contacts = index_city_contacts(town_halls, municipal_assemblies)
 
-    ine_codes_by_municipality = build_ine_code_lookup(presidential_election_results_path)
-    contacts = attach_ine_codes(contacts, ine_codes_by_municipality)
+    ine_codes_by_municipality, ambiguous_ine_codes_by_municipality = build_ine_code_lookup(
+        presidential_election_results_path
+    )
+    contacts = attach_ine_codes(contacts, ine_codes_by_municipality, ambiguous_ine_codes_by_municipality)
 
     return persist_city_contacts(contacts)
 
