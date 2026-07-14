@@ -1,11 +1,42 @@
+import asyncio
+from pathlib import Path
+
+from huggingface_hub import hf_hub_download
+from scrapling.parser import Selector
 from prefect import flow, task, get_run_logger
 from scrapling.fetchers import StealthyFetcher
-from scrapling.parser import Selector
 
 from minha_regiao.flows.extract_cities.Settings import settings
 from minha_regiao.flows.extract_cities.schema.CityContacts import CityContacts
 from minha_regiao.flows.extract_cities.schema.MunicipalContact import MunicipalContact
+from minha_regiao.flows.extract_cities.services.CityRepository import persist_cities
+from minha_regiao.flows.extract_cities.services.IneCodeLookup import extract_ine_codes_by_municipality, match_ine_code
 from minha_regiao.flows.extract_cities.services.MunicipalContactParser import parse_municipal_contact_row
+
+@task(name="download_election_results")
+def download_election_results(repo_id: str, filename: str) -> Path:
+    logger = get_run_logger()
+    logger.info(f"Downloading {filename} from {repo_id}")
+
+    path = hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        repo_type="dataset",
+        token=settings.hf_api_key or None,
+    )
+
+    logger.info(f"Downloaded election results to {path}")
+    return Path(path)
+
+
+@task(name="build_ine_code_lookup")
+def build_ine_code_lookup(election_results_path: Path) -> dict[str, str]:
+    logger = get_run_logger()
+
+    ine_codes_by_municipality = extract_ine_codes_by_municipality(election_results_path)
+
+    logger.info(f"Built INE code lookup for {len(ine_codes_by_municipality)} municipalities")
+    return ine_codes_by_municipality
 
 
 @task(name="fetch_contacts_page")
@@ -68,11 +99,50 @@ def index_city_contacts(
     return contacts
 
 
+@task(name="attach_ine_codes")
+def attach_ine_codes(contacts: list[CityContacts], ine_codes_by_municipality: dict[str, str]) -> list[CityContacts]:
+    logger = get_run_logger()
+
+    updated = []
+    unmatched = []
+    for contact in contacts:
+        ine_code = match_ine_code(contact.municipality, ine_codes_by_municipality)
+        if ine_code is None:
+            unmatched.append(contact.municipality)
+        updated.append(contact.model_copy(update={"ine_code": ine_code}))
+
+    if unmatched:
+        logger.warning(f"No INE code found for: {sorted(unmatched)}")
+
+    logger.info(f"Attached INE codes to {len(updated) - len(unmatched)}/{len(updated)} city contacts")
+
+    return updated
+
+
+@task(name="persist_city_contacts")
+def persist_city_contacts(contacts: list[CityContacts]) -> list[CityContacts]:
+    logger = get_run_logger()
+
+    matched = [contact for contact in contacts if contact.ine_code is not None]
+    skipped = len(contacts) - len(matched)
+    if skipped:
+        logger.warning(f"Skipping {skipped} city contacts with no INE code (cannot upsert without a key)")
+
+    persisted = asyncio.run(persist_cities(settings.database_url, matched))
+
+    logger.info(f"Persisted {persisted} cities")
+    return contacts
+
+
 @flow(
     name="extract_cities",
     description="Extract and index town hall and municipal assembly contacts from the ANMP website by city.",
 )
-def extract_cities() -> list[CityContacts]:
+def extract_cities(hf_dataset_repo_id: str, presidential_election_results_filename: str) -> list[CityContacts]:
+    presidential_election_results_path = download_election_results(
+        hf_dataset_repo_id, presidential_election_results_filename
+    )
+
     town_hall_page = fetch_contacts_page(settings.anmp_town_hall_url)
     municipal_assembly_page = fetch_contacts_page(settings.anmp_municipal_assembly_url)
 
@@ -82,8 +152,16 @@ def extract_cities() -> list[CityContacts]:
     town_halls = parse_municipal_contacts(town_hall_rows)
     municipal_assemblies = parse_municipal_contacts(municipal_assembly_rows)
 
-    return index_city_contacts(town_halls, municipal_assemblies)
+    contacts = index_city_contacts(town_halls, municipal_assemblies)
+
+    ine_codes_by_municipality = build_ine_code_lookup(presidential_election_results_path)
+    contacts = attach_ine_codes(contacts, ine_codes_by_municipality)
+
+    return persist_city_contacts(contacts)
 
 
 if __name__ == "__main__":
-    extract_cities()
+    extract_cities(
+        hf_dataset_repo_id="minharegiao/portuguese-elections",
+        presidential_election_results_filename="raw/presidential/PR_2026_Globais.xlsx",
+    )

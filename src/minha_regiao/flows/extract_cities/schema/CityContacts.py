@@ -5,6 +5,7 @@ from minha_regiao.flows.extract_cities.schema.MunicipalContact import MunicipalC
 
 class CityContacts(BaseModel):
     municipality: str
+    ine_code: str | None = None
     town_hall: MunicipalContact
     municipal_assembly: MunicipalContact
 

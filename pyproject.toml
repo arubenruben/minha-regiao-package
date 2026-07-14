@@ -48,6 +48,11 @@ extract_election_files = [
 extract_cities = [
     "minha_regiao[prefect]",
     "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "huggingface-hub>=1.23.0",
+    "pandas>=2.3.0",
+    "openpyxl>=3.1.5",
+    "Levenshtein>=0.27.3",
 ]
 
 database = [
