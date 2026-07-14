@@ -16,10 +16,12 @@ from minha_regiao.flows.extract_rmues.services.RMURepository import (
     update_pdf_urls,
 )
 
-# How many DR detail pages to fetch concurrently through a single shared
-# browser (as tabs in its page pool), instead of launching one browser per
-# document. Kept conservative to stay polite to the target site.
-PDF_FETCH_CONCURRENCY = 8
+# How many DR detail pages to resolve per batch, and concurrently within
+# that batch, through a single shared browser (as tabs in its page pool).
+# Each batch is persisted before moving on to the next one, so a failure
+# partway through only loses the in-flight batch, not everything resolved
+# so far.
+PDF_BATCH_SIZE = 8
 
 
 @task(name="fetch_rmue_page")
@@ -68,37 +70,37 @@ async def find_pending_documents() -> list[PendingDocument]:
     return documents
 
 
-@task(name="fetch_pdf_urls")
-async def fetch_pdf_urls(documents: list[PendingDocument]) -> list[PendingDocument]:
+async def _resolve_document(session: AsyncStealthySession, document: PendingDocument, logger) -> PendingDocument:
+    try:
+        pdf_url = await resolve_pdf_url(session, document.dre_url)
+    except Exception:
+        logger.warning(f"Failed to fetch {document.dre_url}", exc_info=True)
+        pdf_url = None
+
+    if pdf_url is None:
+        logger.warning(f"No PDF link found on {document.dre_url}")
+
+    return document.model_copy(update={"pdf_url": pdf_url})
+
+
+@task(name="resolve_pdf_urls")
+async def resolve_pdf_urls(documents: list[PendingDocument]) -> int:
     logger = get_run_logger()
 
-    async def resolve(session: AsyncStealthySession, document: PendingDocument) -> PendingDocument:
-        try:
-            pdf_url = await resolve_pdf_url(session, document.dre_url)
-        except Exception:
-            logger.warning(f"Failed to fetch {document.dre_url}", exc_info=True)
-            pdf_url = None
+    persisted = 0
+    async with AsyncStealthySession(headless=True, network_idle=True, max_pages=PDF_BATCH_SIZE) as session:
+        for start in range(0, len(documents), PDF_BATCH_SIZE):
+            batch = documents[start : start + PDF_BATCH_SIZE]
 
-        if pdf_url is None:
-            logger.warning(f"No PDF link found on {document.dre_url}")
+            resolved = await asyncio.gather(*(_resolve_document(session, document, logger) for document in batch))
+            updated = await update_pdf_urls(settings.database_url, resolved)
+            persisted += updated
 
-        return document.model_copy(update={"pdf_url": pdf_url})
+            batch_number = start // PDF_BATCH_SIZE + 1
+            logger.info(f"Batch {batch_number}: persisted {updated}/{len(batch)} PDF urls")
 
-    async with AsyncStealthySession(headless=True, network_idle=True, max_pages=PDF_FETCH_CONCURRENCY) as session:
-        resolved = await asyncio.gather(*(resolve(session, document) for document in documents))
-
-    logger.info(f"Resolved {sum(1 for d in resolved if d.pdf_url)}/{len(resolved)} PDF links")
-    return list(resolved)
-
-
-@task(name="persist_pdf_urls")
-async def persist_pdf_urls(documents: list[PendingDocument]) -> int:
-    logger = get_run_logger()
-
-    updated = await update_pdf_urls(settings.database_url, documents)
-
-    logger.info(f"Updated {updated} documents with a resolved PDF url")
-    return updated
+    logger.info(f"Resolved and persisted {persisted}/{len(documents)} PDF urls in total")
+    return persisted
 
 
 @flow(
@@ -111,8 +113,7 @@ async def extract_rmues(base_url: str) -> int:
     await persist_rmue_page(entries)
 
     pending_documents = await find_pending_documents()
-    resolved_documents = await fetch_pdf_urls(pending_documents)
-    return await persist_pdf_urls(resolved_documents)
+    return await resolve_pdf_urls(pending_documents)
 
 
 if __name__ == "__main__":
