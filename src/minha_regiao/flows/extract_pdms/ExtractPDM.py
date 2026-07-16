@@ -1,8 +1,10 @@
 import asyncio
 
+import httpx
 from prefect import flow, task, get_run_logger
 from prefect.cache_policies import NO_CACHE
 from scrapling.fetchers import AsyncStealthySession
+from tqdm import tqdm
 
 from minha_regiao.flows.extract_pdms.Settings import settings
 from minha_regiao.flows.extract_pdms.schema.CityWebsite import CityWebsite
@@ -21,13 +23,22 @@ async def find_pending_cities() -> list[CityWebsite]:
     return cities
 
 
-async def _crawl_city(session: AsyncStealthySession, city: CityWebsite, logger) -> PDMResult | None:
+@task(name="crawl_city_for_pdm", task_run_name="crawl-city-{city.website}", cache_policy=NO_CACHE)
+async def _crawl_city(
+    session: AsyncStealthySession, http_client: httpx.AsyncClient, city: CityWebsite
+) -> PDMResult | None:
+    logger = get_run_logger()
+
     try:
         result = await find_pdm(
             session,
             city,
             settings.max_pages_per_site,
             settings.max_depth,
+            http_client,
+            settings.pdm_output_dir,
+            settings.min_pdf_pages,
+            settings.min_pdm_keyword_hits,
             site_concurrency=settings.site_concurrency,
             request_delay_seconds=settings.site_request_delay_seconds,
             max_retries_on_403=settings.max_retries_on_403,
@@ -46,7 +57,7 @@ async def _crawl_city(session: AsyncStealthySession, city: CityWebsite, logger) 
     return result
 
 
-@task(name="crawl_cities_for_pdm", cache_policy=NO_CACHE)
+@flow(name="crawl_cities_for_pdm")
 async def crawl_cities_for_pdm(cities: list[CityWebsite]) -> int:
     logger = get_run_logger()
 
@@ -56,19 +67,43 @@ async def crawl_cities_for_pdm(cities: list[CityWebsite]) -> int:
     # site_concurrency pages of its own.
     max_pages = city_concurrency * settings.site_concurrency
 
+    semaphore = asyncio.Semaphore(city_concurrency)
+
+    async def crawl_with_limit(
+        session: AsyncStealthySession, http_client: httpx.AsyncClient, city: CityWebsite
+    ) -> PDMResult | None:
+        async with semaphore:
+            return await _crawl_city(session, http_client, city)
+
     persisted = 0
-    async with AsyncStealthySession(headless=True, network_idle=True, max_pages=max_pages) as session:
-        for start in range(0, len(cities), city_concurrency):
-            batch = cities[start : start + city_concurrency]
+    pending_results: list[PDMResult] = []
 
-            resolved = await asyncio.gather(*(_crawl_city(session, city, logger) for city in batch))
-            found = [result for result in resolved if result is not None]
+    async def flush() -> None:
+        nonlocal persisted
+        updated = await persist_pdm_results(settings.database_url, pending_results)
+        persisted += updated
+        logger.info(f"Persisted {updated}/{len(pending_results)} PDMs (running total: {persisted})")
+        pending_results.clear()
 
-            updated = await persist_pdm_results(settings.database_url, found)
-            persisted += updated
+    async with (
+        AsyncStealthySession(headless=True, network_idle=True, max_pages=max_pages) as session,
+        httpx.AsyncClient() as http_client,
+    ):
+        with tqdm(total=len(cities), desc="Crawling cities for PDM", unit="city") as progress:
+            for coro in asyncio.as_completed([crawl_with_limit(session, http_client, city) for city in cities]):
+                result = await coro
+                if result is not None:
+                    pending_results.append(result)
 
-            batch_number = start // city_concurrency + 1
-            logger.info(f"Batch {batch_number}: persisted {updated}/{len(batch)} PDMs")
+                if len(pending_results) >= city_concurrency:
+                    await flush()
+
+                progress.set_postfix(persisted=persisted)
+                progress.update(1)
+
+            if pending_results:
+                await flush()
+                progress.set_postfix(persisted=persisted)
 
     logger.info(f"Resolved and persisted {persisted}/{len(cities)} PDMs in total")
     return persisted

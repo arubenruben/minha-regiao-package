@@ -1,13 +1,16 @@
 import asyncio
 from collections import deque
+from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
+import httpx
 from prefect.tasks import exponential_backoff
 from scrapling.fetchers import AsyncStealthySession
 from scrapling.engines.toolbelt.custom import Response
 
 from minha_regiao.flows.extract_pdms.schema.CityWebsite import CityWebsite
 from minha_regiao.flows.extract_pdms.schema.PDMResult import PDMResult
+from minha_regiao.flows.extract_pdms.services.PDMDocumentValidator import download_and_validate_pdm
 from minha_regiao.flows.extract_pdms.services.PDMLinkMatcher import (
     is_high_priority,
     is_pdm_regulation_pdf,
@@ -70,16 +73,23 @@ async def find_pdm(
     city: CityWebsite,
     max_pages_per_site: int,
     max_depth: int,
+    http_client: httpx.AsyncClient,
+    out_dir: Path,
+    min_pdf_pages: int,
+    min_keyword_hits: int,
     site_concurrency: int = 1,
     request_delay_seconds: float = 1.0,
     max_retries_on_403: int = 3,
     retry_backoff_seconds: float = 5.0,
 ) -> PDMResult | None:
     """Crawls `city.website` breadth-first, following only links that look
-    like municipal-planning navigation, until it finds a PDF that names both
-    the PDM and "regulamento". Links that already name the PDM are explored
-    before merely plausible ones, so the limited page budget is spent on the
-    most promising path first.
+    like municipal-planning navigation, until it finds a link that names
+    both the PDM and "regulamento" whose downloaded document also looks like
+    one (see `download_and_validate_pdm`) — a link that matches but fails
+    validation is treated as a false positive and the search continues.
+    Links that already name the PDM are explored before merely plausible
+    ones, so the limited page budget is spent on the most promising path
+    first.
 
     Pages are fetched in rounds of up to `site_concurrency` at a time (1, i.e.
     fully sequential, by default), each request throttled and retried on
@@ -92,6 +102,7 @@ async def find_pdm(
     priority_frontier: deque[tuple[str, int]] = deque()
     frontier: deque[tuple[str, int]] = deque([(city.website, 0)])
     visited: set[str] = set()
+    attempted_documents: set[str] = set()
 
     while priority_frontier or frontier:
         if len(visited) >= max_pages_per_site:
@@ -134,7 +145,14 @@ async def find_pdm(
                 text = anchor.get_all_text(strip=True)
 
                 if is_pdm_regulation_pdf(absolute, text):
-                    return PDMResult(city_id=city.id, source_url=url, pdf_url=absolute)
+                    normalized_doc = _strip_fragment(absolute)
+                    if normalized_doc not in attempted_documents:
+                        attempted_documents.add(normalized_doc)
+                        if await download_and_validate_pdm(
+                            http_client, out_dir, city.name, absolute, min_pdf_pages, min_keyword_hits
+                        ):
+                            return PDMResult(city_id=city.id, source_url=url, pdf_url=absolute)
+                    continue
 
                 if (
                     depth >= max_depth

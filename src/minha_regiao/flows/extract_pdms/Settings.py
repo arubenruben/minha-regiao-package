@@ -34,5 +34,15 @@ class Settings(BaseSettings):
     max_retries_on_403: int = 3
     retry_backoff_seconds: float = 5.0
 
+    # Where downloaded PDM candidates are saved, one subfolder per city.
+    pdm_output_dir: Path = Path(__file__).with_name("out")
+
+    # A downloaded candidate is only accepted as the PDM once it looks like
+    # one: municipal sites link plenty of other regulations that also match
+    # the URL/link-text rules, so this content-level check catches those
+    # false positives.
+    min_pdf_pages: int = 10
+    min_pdm_keyword_hits: int = 5
+
 
 settings = Settings()

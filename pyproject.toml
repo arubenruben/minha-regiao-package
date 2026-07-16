@@ -55,13 +55,21 @@ extract_cities = [
     "Levenshtein>=0.27.3",
 ]
 
+extract_pdms = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "pypdf>=6.14.2",
+    "tqdm>=4.68.4",
+]
+
 database = [
     "tortoise-orm[asyncpg]>=1.1.7",
     "alembic>=1.18.5",
 ]
 
 dev = [
-    "minha_regiao[database,extract_cities,extract_election_files,prefect,scraping]"
+    "minha_regiao[database,extract_cities,extract_election_files,extract_pdms,prefect,scraping]"
 ]
 
 [tool.setuptools.packages.find]

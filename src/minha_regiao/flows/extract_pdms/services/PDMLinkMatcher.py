@@ -26,6 +26,26 @@ _NON_PAGE_EXTENSIONS = (
     ".mp3", ".mp4", ".avi", ".pdf",
 )
 
+# Some municipal CMSes serve documents through a generic action route (e.g.
+# ".../regulamento-x/download") instead of a direct file URL, giving no
+# extension to key off. Navigating a browser straight to either kind of link
+# triggers a file download rather than a page load, so both must be treated
+# the same way: as a document, never as a page to crawl further.
+_DOWNLOAD_PATH_SEGMENT = "download"
+
+# Sections that municipal sites link to constantly (news archives, event
+# calendars, ...) but which never lead toward the PDM regulation. Skipped
+# outright, by URL path alone, even if a page in there happens to also match
+# a _NAV_KEYWORDS term (e.g. a news article about a new "regulamento"), since
+# following them just burns the page budget on an ever-repeating subtree.
+_EXCLUDED_PATH_KEYWORDS = (
+    "noticias",
+    "eventos",
+    "agenda",
+    "imprensa",
+    "galeria",
+)
+
 
 _WORD_SEPARATORS = ("_", "-", "+", ".", "/")
 
@@ -43,13 +63,22 @@ def _normalize(text: str) -> str:
     return " ".join(normalized.split())
 
 
+def _looks_like_document(href: str) -> bool:
+    """Whether `href` points at a file to download rather than a navigable
+    HTML page."""
+    path = urlparse(href).path.lower().rstrip("/")
+    if any(path.endswith(extension) for extension in _NON_PAGE_EXTENSIONS):
+        return True
+    return path.rsplit("/", 1)[-1] == _DOWNLOAD_PATH_SEGMENT
+
+
 def is_pdm_regulation_pdf(href: str, text: str) -> bool:
-    """A link is the PDM regulation when it points at a PDF and either its
-    href or its visible text names both the PDM and "regulamento" (municipal
-    sites link plenty of other PDFs, so both signals are required to avoid
-    picking up an unrelated regulation).
+    """A link is the PDM regulation when it points at a document and either
+    its href or its visible text names both the PDM and "regulamento"
+    (municipal sites link plenty of other documents, so both signals are
+    required to avoid picking up an unrelated regulation).
     """
-    if not urlparse(href).path.lower().endswith(".pdf"):
+    if not _looks_like_document(href):
         return False
 
     haystack = _normalize(f"{href} {text}")
@@ -64,8 +93,11 @@ def is_high_priority(href: str, text: str) -> bool:
 
 
 def is_worth_following(href: str, text: str) -> bool:
-    path = urlparse(href).path.lower()
-    if any(path.endswith(extension) for extension in _NON_PAGE_EXTENSIONS):
+    if _looks_like_document(href):
+        return False
+
+    path = _normalize(urlparse(href).path)
+    if any(keyword in path for keyword in _EXCLUDED_PATH_KEYWORDS):
         return False
 
     haystack = _normalize(f"{href} {text}")
