@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections import deque
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -16,6 +17,14 @@ from minha_regiao.flows.extract_pdms.services.PDMLinkMatcher import (
     is_pdm_regulation_pdf,
     is_worth_following,
 )
+
+# Scrapling logs every failed/retried request straight to its own console
+# handler (see scrapling.core.utils._utils.setup_logger), independent of
+# Prefect's logging. _fetch_page already retries and gracefully skips every
+# failure it can hit (redirect loops, download-triggering URLs, timeouts,
+# ...) and the outcome is reported at the appropriate level through Prefect's
+# own logger, so Scrapling's per-attempt console spam is silenced here.
+logging.getLogger("scrapling").setLevel(logging.CRITICAL)
 
 # 401/403 are assumed to mean the *site* is blocking/rate-limiting us, not
 # just that one page, so they're retried with backoff rather than skipped

@@ -66,10 +66,14 @@ def _normalize(text: str) -> str:
 def _looks_like_document(href: str) -> bool:
     """Whether `href` points at a file to download rather than a navigable
     HTML page."""
-    path = urlparse(href).path.lower().rstrip("/")
+    path = urlparse(href).path.lower()
     if any(path.endswith(extension) for extension in _NON_PAGE_EXTENSIONS):
         return True
-    return path.rsplit("/", 1)[-1] == _DOWNLOAD_PATH_SEGMENT
+    # Some CMSes (e.g. Joomla's docman) route downloads as
+    # ".../download/<doc-id>/<category-id>/<file-id>", with "download" as a
+    # middle segment rather than the last one.
+    segments = [segment for segment in path.split("/") if segment]
+    return _DOWNLOAD_PATH_SEGMENT in segments
 
 
 def is_pdm_regulation_pdf(href: str, text: str) -> bool:
