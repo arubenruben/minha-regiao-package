@@ -59,6 +59,8 @@ extract_cities = [
 extract_districts = [
     "minha_regiao[prefect]",
     "minha_regiao[database]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
 ]
 
 extract_pdms = [

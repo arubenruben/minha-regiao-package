@@ -19,6 +19,11 @@ async def persist_districts(db_url: str, references: list[DistrictReference]) ->
     return persisted
 
 
+async def fetch_district_wikipedia_urls(db_url: str) -> dict[str, str | None]:
+    async with connection(db_url):
+        return {district.name: district.wikipedia_url for district in await District.all()}
+
+
 async def assign_city_districts(db_url: str, references: list[DistrictReference]) -> int:
     async with connection(db_url):
         updated = 0

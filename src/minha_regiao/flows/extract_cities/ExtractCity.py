@@ -201,7 +201,7 @@ def ensure_city_dataset_repo(repo_id: str) -> None:
 
 @task(name="publish_city_dataset")
 def publish_city_dataset(repo_id: str, records: list[CityDatasetRecord]) -> None:
-    CityDatasetPublisher(repo_id, settings.hf_api_key).publish(records)
+    CityDatasetPublisher(repo_id, settings.hf_api_key, settings.city_dataset_config_name).publish(records)
 
 
 @flow(
@@ -209,7 +209,9 @@ def publish_city_dataset(repo_id: str, records: list[CityDatasetRecord]) -> None
     description="Extract and index town hall and municipal assembly contacts from the ANMP website by city.",
 )
 def extract_cities(
-    hf_dataset_repo_id: str, presidential_election_results_filename: str, city_dataset_repo_id: str
+    hf_dataset_repo_id: str = settings.hf_dataset_repo_id,
+    presidential_election_results_filename: str = settings.presidential_election_results_filename,
+    city_dataset_repo_id: str = settings.city_dataset_repo_id,
 ) -> list[CityContacts]:
     presidential_election_results_path = download_election_results(
         hf_dataset_repo_id, presidential_election_results_filename
@@ -240,8 +242,4 @@ def extract_cities(
 
 
 if __name__ == "__main__":
-    extract_cities(
-        hf_dataset_repo_id="minharegiao/portuguese-elections",
-        presidential_election_results_filename="raw/presidential/PR_2026_Globais.xlsx",
-        city_dataset_repo_id="minharegiao/portuguese-cities",
-    )
+    extract_cities()

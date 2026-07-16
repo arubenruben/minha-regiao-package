@@ -11,5 +11,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
 
+    hf_api_key: str | None = None
+    district_dataset_repo_id: str = "minharegiao/portuguese-geo"
+    district_dataset_config_name: str = "districts"
+
 
 settings = Settings()

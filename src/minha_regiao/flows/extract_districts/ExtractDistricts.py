@@ -1,11 +1,18 @@
 import asyncio
 
+from huggingface_hub import HfApi
 from prefect import flow, task, get_run_logger
 
 from minha_regiao.flows.extract_districts.Settings import settings
+from minha_regiao.flows.extract_districts.schema.DistrictDatasetRecord import DistrictDatasetRecord
 from minha_regiao.flows.extract_districts.schema.DistrictReference import DistrictReference
+from minha_regiao.flows.extract_districts.services.DistrictDatasetPublisher import DistrictDatasetPublisher
 from minha_regiao.flows.extract_districts.services.DistrictReferenceLoader import load_district_references
-from minha_regiao.flows.extract_districts.services.DistrictRepository import assign_city_districts, persist_districts
+from minha_regiao.flows.extract_districts.services.DistrictRepository import (
+    assign_city_districts,
+    fetch_district_wikipedia_urls,
+    persist_districts,
+)
 
 
 @task(name="load_district_references")
@@ -38,15 +45,60 @@ def assign(references: list[DistrictReference]) -> int:
     return updated
 
 
+@task(name="fetch_district_wikipedia_urls")
+def fetch_wikipedia_urls() -> dict[str, str | None]:
+    return asyncio.run(fetch_district_wikipedia_urls(settings.database_url))
+
+
+@task(name="build_district_dataset_records")
+def build_district_dataset_records(
+    references: list[DistrictReference], wikipedia_urls_by_name: dict[str, str | None]
+) -> list[DistrictDatasetRecord]:
+    logger = get_run_logger()
+
+    records = [
+        DistrictDatasetRecord(
+            name=reference.name,
+            ine_prefix=reference.ine_prefix,
+            wikipedia_url=wikipedia_urls_by_name.get(reference.name),
+        )
+        for reference in references
+    ]
+
+    logger.info(f"Built {len(records)} district dataset records")
+    return records
+
+
+@task(name="ensure_district_dataset_repo")
+def ensure_district_dataset_repo(repo_id: str) -> None:
+    logger = get_run_logger()
+    logger.info(f"Ensuring Hugging Face dataset repo {repo_id} exists")
+
+    api = HfApi(token=settings.hf_api_key)
+    api.create_repo(repo_id, repo_type="dataset", exist_ok=True, private=False)
+
+
+@task(name="publish_district_dataset")
+def publish_district_dataset(repo_id: str, records: list[DistrictDatasetRecord]) -> None:
+    DistrictDatasetPublisher(repo_id, settings.hf_api_key, settings.district_dataset_config_name).publish(records)
+
+
 @flow(
     name="extract_districts",
-    description="Populate the district table and assign each city to its district by INE code prefix.",
+    description="Populate the district table, assign each city to its district by INE code prefix, "
+    "and publish the district dataset.",
 )
-def extract_districts() -> int:
+def extract_districts(district_dataset_repo_id: str = settings.district_dataset_repo_id) -> int:
     references = load_references()
     persist(references)
+    updated = assign(references)
 
-    return assign(references)
+    wikipedia_urls_by_name = fetch_wikipedia_urls()
+    records = build_district_dataset_records(references, wikipedia_urls_by_name)
+    ensure_district_dataset_repo(district_dataset_repo_id)
+    publish_district_dataset(district_dataset_repo_id, records)
+
+    return updated
 
 
 if __name__ == "__main__":
