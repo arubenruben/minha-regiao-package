@@ -59,11 +59,11 @@ def ensure_huggingface_login(api: HfApi) -> None:
 
 
 @task(name="fetch_mai_page")
-def fetch_mai_page(base_url: str):
+async def fetch_mai_page(base_url: str):
     logger = get_run_logger()
     logger.info(f"Fetching MAI page from {base_url}")
 
-    page = StealthyFetcher.fetch(base_url, headless=True, network_idle=True)
+    page = await StealthyFetcher.async_fetch(base_url, headless=True, network_idle=True)
 
     logger.info("Fetched MAI page")
     return page
@@ -120,14 +120,14 @@ def reduce_election_files(results: list[list[Election]]) -> list[Election]:
 
 
 @task(name="structure_election_files")
-def structure_election_files(elections: list[Election]) -> list[StructuredElection]:
+async def structure_election_files(elections: list[Election]) -> list[StructuredElection]:
     logger = get_run_logger()
 
     strategy = OpenAIStructuredOutputStrategy(
         settings.openrouter_api_key, settings.openrouter_model, base_url=settings.openrouter_base_url
     )
     extractor = ElectionMetadataExtractor(strategy)
-    metadata = asyncio.run(extractor.extract(elections))
+    metadata = await extractor.extract(elections)
 
     structured = [
         StructuredElection.from_election(election, election_metadata)
@@ -147,10 +147,10 @@ def ensure_hf_dataset_repo(api: HfApi, repo_id: str) -> None:
 
 
 @task(name="upload_raw_election_files")
-def upload_raw_election_files(
+async def upload_raw_election_files(
     api: HfApi, repo_id: str, elections: list[StructuredElection]
 ) -> list[StructuredElection]:
-    return ElectionRawFileUploader(api, repo_id).upload(elections)
+    return await ElectionRawFileUploader(api, repo_id).upload(elections)
 
 
 @task(name="publish_election_dataset")
@@ -159,7 +159,7 @@ def publish_election_dataset(repo_id: str, token: str, config_name: str, electio
 
 
 @flow(name="fetch_election_files", description="Fetch election files from the specified base URL.")
-def fetch_election_files() -> list[StructuredElection]:
+async def fetch_election_files() -> list[StructuredElection]:
     logger = get_run_logger()
 
     api = HfApi(token=settings.hf_api_key)
@@ -167,24 +167,24 @@ def fetch_election_files() -> list[StructuredElection]:
 
     logger.info(f"Fetching election files from {settings.seg_mai_base_url}")
 
-    page = fetch_mai_page(settings.seg_mai_base_url)
+    page = await fetch_mai_page(settings.seg_mai_base_url)
     hrefs = extract_subsite_links(page)
     fields = map_links_to_fields(hrefs, settings.seg_mai_base_url)
     mai_webpage = build_mai_webpage(fields)
 
-    results = [
+    results = await asyncio.gather(
         european_elections(mai_webpage.european_url),
         parliament_elections(mai_webpage.parliament_url),
         presidential_elections(mai_webpage.president_url),
         regional_elections(mai_webpage.regional_assembly_url),
         town_hall_elections(mai_webpage.town_hall_url),
-    ]
+    )
 
     elections = reduce_election_files(results)
-    structured = structure_election_files(elections)
+    structured = await structure_election_files(elections)
 
     ensure_hf_dataset_repo(api, settings.hf_dataset_repo_id)
-    structured_with_raw_files = upload_raw_election_files(api, settings.hf_dataset_repo_id, structured)
+    structured_with_raw_files = await upload_raw_election_files(api, settings.hf_dataset_repo_id, structured)
     publish_election_dataset(
         settings.hf_dataset_repo_id, settings.hf_api_key, HF_DATASET_CONFIG_NAME, structured_with_raw_files
     )
@@ -193,4 +193,4 @@ def fetch_election_files() -> list[StructuredElection]:
 
 
 if __name__ == "__main__":
-    fetch_election_files()
+    asyncio.run(fetch_election_files())
