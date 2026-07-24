@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from minha_regiao.flows.extract_districts.schema.DistrictReference import DistrictReference
+from minha_regiao.flows.extract_geo.schema.DistrictReference import DistrictReference
 
 DEFAULT_DATA_PATH = Path(__file__).parents[1] / "data" / "districts.json"
 

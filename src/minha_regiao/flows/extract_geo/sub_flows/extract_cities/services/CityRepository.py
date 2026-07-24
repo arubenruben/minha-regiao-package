@@ -1,6 +1,6 @@
 from minha_regiao.database.DatabaseManager import connection
 from minha_regiao.entity.City import City
-from minha_regiao.flows.extract_cities.schema.CityContacts import CityContacts
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.CityContacts import CityContacts
 
 
 async def persist_cities(db_url: str, contacts: list[CityContacts]) -> int:

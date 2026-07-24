@@ -1,28 +1,33 @@
 import asyncio
 from pathlib import Path
 
-from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub import hf_hub_download
 from scrapling.parser import Selector
 from prefect import flow, task, get_run_logger
 from scrapling.fetchers import StealthyFetcher
 
-from minha_regiao.flows.extract_cities.Settings import settings
-from minha_regiao.flows.extract_cities.schema.CityContacts import CityContacts
-from minha_regiao.flows.extract_cities.schema.CityDatasetRecord import CityDatasetRecord
-from minha_regiao.flows.extract_cities.schema.MunicipalContact import MunicipalContact
-from minha_regiao.flows.extract_cities.services.CityDatasetPublisher import CityDatasetPublisher
-from minha_regiao.flows.extract_cities.services.CityRepository import persist_cities
-from minha_regiao.flows.extract_cities.services.FuzzyMatch import resolve_name
-from minha_regiao.flows.extract_cities.services.IneCodeLookup import (
+from minha_regiao.flows.extract_geo.Settings import settings as geo_settings
+from minha_regiao.flows.extract_geo.services.DatasetPublisher import DatasetPublisher
+from minha_regiao.flows.extract_geo.services.DatasetRepo import ensure_dataset_repo
+from minha_regiao.flows.extract_geo.services.DistrictReferenceLoader import (
+    load_district_references,
+    match_district_name,
+)
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.Settings import settings
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.CityContacts import CityContacts
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.CityDatasetRecord import CityDatasetRecord
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.MunicipalContact import MunicipalContact
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.CityRepository import persist_cities
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.FuzzyMatch import resolve_name
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.IneCodeLookup import (
     extract_ambiguous_ine_codes_by_municipality,
     extract_ine_codes_by_municipality,
     match_ine_code,
 )
-from minha_regiao.flows.extract_cities.services.MunicipalContactParser import parse_municipal_contact_row
-from minha_regiao.flows.extract_districts.services.DistrictReferenceLoader import (
-    load_district_references,
-    match_district_name,
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.MunicipalContactParser import (
+    parse_municipal_contact_row,
 )
+
 
 @task(name="download_election_results")
 def download_election_results(repo_id: str, filename: str) -> Path:
@@ -33,7 +38,7 @@ def download_election_results(repo_id: str, filename: str) -> Path:
         repo_id=repo_id,
         filename=filename,
         repo_type="dataset",
-        token=settings.hf_api_key or None,
+        token=geo_settings.hf_api_key or None,
     )
 
     logger.info(f"Downloaded election results to {path}")
@@ -151,7 +156,7 @@ def persist_city_contacts(contacts: list[CityContacts]) -> list[CityContacts]:
     if skipped:
         logger.warning(f"Skipping {skipped} city contacts with no INE code (cannot upsert without a key)")
 
-    persisted = asyncio.run(persist_cities(settings.database_url, matched))
+    persisted = asyncio.run(persist_cities(geo_settings.database_url, matched))
 
     logger.info(f"Persisted {persisted} cities")
     return contacts
@@ -190,18 +195,11 @@ def build_city_dataset_records(contacts: list[CityContacts]) -> list[CityDataset
     return records
 
 
-@task(name="ensure_city_dataset_repo")
-def ensure_city_dataset_repo(repo_id: str) -> None:
-    logger = get_run_logger()
-    logger.info(f"Ensuring Hugging Face dataset repo {repo_id} exists")
-
-    api = HfApi(token=settings.hf_api_key)
-    api.create_repo(repo_id, repo_type="dataset", exist_ok=True, private=False)
-
-
 @task(name="publish_city_dataset")
 def publish_city_dataset(repo_id: str, records: list[CityDatasetRecord]) -> None:
-    CityDatasetPublisher(repo_id, settings.hf_api_key, settings.city_dataset_config_name).publish(records)
+    DatasetPublisher[CityDatasetRecord](repo_id, geo_settings.hf_api_key, settings.city_dataset_config_name).publish(
+        records
+    )
 
 
 @flow(
@@ -209,12 +207,12 @@ def publish_city_dataset(repo_id: str, records: list[CityDatasetRecord]) -> None
     description="Extract and index town hall and municipal assembly contacts from the ANMP website by city.",
 )
 def extract_cities(
-    hf_dataset_repo_id: str = settings.hf_dataset_repo_id,
+    election_results_dataset_repo_id: str = settings.election_results_dataset_repo_id,
     presidential_election_results_filename: str = settings.presidential_election_results_filename,
-    city_dataset_repo_id: str = settings.city_dataset_repo_id,
+    geo_dataset_repo_id: str = geo_settings.geo_dataset_repo_id,
 ) -> list[CityContacts]:
     presidential_election_results_path = download_election_results(
-        hf_dataset_repo_id, presidential_election_results_filename
+        election_results_dataset_repo_id, presidential_election_results_filename
     )
 
     town_hall_page = fetch_contacts_page(settings.anmp_town_hall_url)
@@ -235,8 +233,8 @@ def extract_cities(
     contacts = persist_city_contacts(contacts)
 
     records = build_city_dataset_records(contacts)
-    ensure_city_dataset_repo(city_dataset_repo_id)
-    publish_city_dataset(city_dataset_repo_id, records)
+    ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+    publish_city_dataset(geo_dataset_repo_id, records)
 
     return contacts
 

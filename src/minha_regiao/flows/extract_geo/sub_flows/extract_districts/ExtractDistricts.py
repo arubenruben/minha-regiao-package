@@ -1,14 +1,17 @@
 import asyncio
 
-from huggingface_hub import HfApi
 from prefect import flow, task, get_run_logger
 
-from minha_regiao.flows.extract_districts.Settings import settings
-from minha_regiao.flows.extract_districts.schema.DistrictDatasetRecord import DistrictDatasetRecord
-from minha_regiao.flows.extract_districts.schema.DistrictReference import DistrictReference
-from minha_regiao.flows.extract_districts.services.DistrictDatasetPublisher import DistrictDatasetPublisher
-from minha_regiao.flows.extract_districts.services.DistrictReferenceLoader import load_district_references
-from minha_regiao.flows.extract_districts.services.DistrictRepository import (
+from minha_regiao.flows.extract_geo.Settings import settings as geo_settings
+from minha_regiao.flows.extract_geo.schema.DistrictReference import DistrictReference
+from minha_regiao.flows.extract_geo.services.DatasetPublisher import DatasetPublisher
+from minha_regiao.flows.extract_geo.services.DatasetRepo import ensure_dataset_repo
+from minha_regiao.flows.extract_geo.services.DistrictReferenceLoader import load_district_references
+from minha_regiao.flows.extract_geo.sub_flows.extract_districts.Settings import settings
+from minha_regiao.flows.extract_geo.sub_flows.extract_districts.schema.DistrictDatasetRecord import (
+    DistrictDatasetRecord,
+)
+from minha_regiao.flows.extract_geo.sub_flows.extract_districts.services.DistrictRepository import (
     assign_city_districts,
     fetch_district_wikipedia_urls,
     persist_districts,
@@ -29,7 +32,7 @@ def load_references() -> list[DistrictReference]:
 def persist(references: list[DistrictReference]) -> int:
     logger = get_run_logger()
 
-    persisted = asyncio.run(persist_districts(settings.database_url, references))
+    persisted = asyncio.run(persist_districts(geo_settings.database_url, references))
 
     logger.info(f"Persisted {persisted} districts")
     return persisted
@@ -39,7 +42,7 @@ def persist(references: list[DistrictReference]) -> int:
 def assign(references: list[DistrictReference]) -> int:
     logger = get_run_logger()
 
-    updated = asyncio.run(assign_city_districts(settings.database_url, references))
+    updated = asyncio.run(assign_city_districts(geo_settings.database_url, references))
 
     logger.info(f"Assigned a district to {updated} cities")
     return updated
@@ -47,7 +50,7 @@ def assign(references: list[DistrictReference]) -> int:
 
 @task(name="fetch_district_wikipedia_urls")
 def fetch_wikipedia_urls() -> dict[str, str | None]:
-    return asyncio.run(fetch_district_wikipedia_urls(settings.database_url))
+    return asyncio.run(fetch_district_wikipedia_urls(geo_settings.database_url))
 
 
 @task(name="build_district_dataset_records")
@@ -69,18 +72,11 @@ def build_district_dataset_records(
     return records
 
 
-@task(name="ensure_district_dataset_repo")
-def ensure_district_dataset_repo(repo_id: str) -> None:
-    logger = get_run_logger()
-    logger.info(f"Ensuring Hugging Face dataset repo {repo_id} exists")
-
-    api = HfApi(token=settings.hf_api_key)
-    api.create_repo(repo_id, repo_type="dataset", exist_ok=True, private=False)
-
-
 @task(name="publish_district_dataset")
 def publish_district_dataset(repo_id: str, records: list[DistrictDatasetRecord]) -> None:
-    DistrictDatasetPublisher(repo_id, settings.hf_api_key, settings.district_dataset_config_name).publish(records)
+    DatasetPublisher[DistrictDatasetRecord](
+        repo_id, geo_settings.hf_api_key, settings.district_dataset_config_name
+    ).publish(records)
 
 
 @flow(
@@ -88,15 +84,15 @@ def publish_district_dataset(repo_id: str, records: list[DistrictDatasetRecord])
     description="Populate the district table, assign each city to its district by INE code prefix, "
     "and publish the district dataset.",
 )
-def extract_districts(district_dataset_repo_id: str = settings.district_dataset_repo_id) -> int:
+def extract_districts(geo_dataset_repo_id: str = geo_settings.geo_dataset_repo_id) -> int:
     references = load_references()
     persist(references)
     updated = assign(references)
 
     wikipedia_urls_by_name = fetch_wikipedia_urls()
     records = build_district_dataset_records(references, wikipedia_urls_by_name)
-    ensure_district_dataset_repo(district_dataset_repo_id)
-    publish_district_dataset(district_dataset_repo_id, records)
+    ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+    publish_district_dataset(geo_dataset_repo_id, records)
 
     return updated
 

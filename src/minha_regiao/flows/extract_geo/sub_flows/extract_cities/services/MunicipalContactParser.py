@@ -1,6 +1,6 @@
 from scrapling.parser import Selector
 
-from minha_regiao.flows.extract_cities.schema.MunicipalContact import MunicipalContact
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.MunicipalContact import MunicipalContact
 
 
 def parse_municipal_contact_row(row: Selector) -> MunicipalContact:

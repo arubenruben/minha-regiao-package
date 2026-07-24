@@ -3,8 +3,8 @@ import logging
 from minha_regiao.database.DatabaseManager import connection
 from minha_regiao.entity.City import City
 from minha_regiao.entity.District import District
-from minha_regiao.flows.extract_districts.schema.DistrictReference import DistrictReference
-from minha_regiao.flows.extract_districts.services.DistrictReferenceLoader import match_district_name
+from minha_regiao.flows.extract_geo.schema.DistrictReference import DistrictReference
+from minha_regiao.flows.extract_geo.services.DistrictReferenceLoader import match_district_name
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, computed_field
 
-from minha_regiao.flows.extract_cities.schema.MunicipalContact import MunicipalContact
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.MunicipalContact import MunicipalContact
 
 
 class CityContacts(BaseModel):

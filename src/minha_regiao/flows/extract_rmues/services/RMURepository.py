@@ -4,7 +4,7 @@ from minha_regiao.database.DatabaseManager import connection
 from minha_regiao.entity.City import City
 from minha_regiao.entity.FeeRegulation import FeeRegulation
 from minha_regiao.entity.RMUE import RMUE
-from minha_regiao.flows.extract_cities.services.FuzzyMatch import resolve_name
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.FuzzyMatch import resolve_name
 from minha_regiao.flows.extract_rmues.schema.PendingDocument import PendingDocument
 from minha_regiao.flows.extract_rmues.schema.RMUERegulation import RegulationDocument, RMUERegulation
 from minha_regiao.flows.extract_rmues.services.RegulationMetadata import extract_year, is_complete

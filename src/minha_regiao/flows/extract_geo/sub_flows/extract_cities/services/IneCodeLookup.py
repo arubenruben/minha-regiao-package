@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from minha_regiao.flows.extract_cities.services.FuzzyMatch import DEFAULT_THRESHOLD, resolve_name
+from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.FuzzyMatch import DEFAULT_THRESHOLD, resolve_name
 
 logger = logging.getLogger(__name__)
 
