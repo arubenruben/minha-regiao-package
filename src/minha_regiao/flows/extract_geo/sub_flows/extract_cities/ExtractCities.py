@@ -1,24 +1,24 @@
 import asyncio
 from pathlib import Path
 
-from huggingface_hub import hf_hub_download
 from scrapling.parser import Selector
 from prefect import flow, task, get_run_logger
 from scrapling.fetchers import StealthyFetcher
 
 from minha_regiao.flows.extract_geo.Settings import settings as geo_settings
+from minha_regiao.flows.extract_geo.services.DatasetDownloader import download_dataset_file
 from minha_regiao.flows.extract_geo.services.DatasetPublisher import DatasetPublisher
 from minha_regiao.flows.extract_geo.services.DatasetRepo import ensure_dataset_repo
 from minha_regiao.flows.extract_geo.services.DistrictReferenceLoader import (
     load_district_references,
     match_district_name,
 )
+from minha_regiao.flows.extract_geo.services.FuzzyMatch import resolve_name
 from minha_regiao.flows.extract_geo.sub_flows.extract_cities.Settings import settings
 from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.CityContacts import CityContacts
 from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.CityDatasetRecord import CityDatasetRecord
 from minha_regiao.flows.extract_geo.sub_flows.extract_cities.schema.MunicipalContact import MunicipalContact
 from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.CityRepository import persist_cities
-from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.FuzzyMatch import resolve_name
 from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.IneCodeLookup import (
     extract_ambiguous_ine_codes_by_municipality,
     extract_ine_codes_by_municipality,
@@ -34,15 +34,10 @@ def download_election_results(repo_id: str, filename: str) -> Path:
     logger = get_run_logger()
     logger.info(f"Downloading {filename} from {repo_id}")
 
-    path = hf_hub_download(
-        repo_id=repo_id,
-        filename=filename,
-        repo_type="dataset",
-        token=geo_settings.hf_api_key or None,
-    )
+    path = download_dataset_file(repo_id, filename, geo_settings.hf_api_key)
 
     logger.info(f"Downloaded election results to {path}")
-    return Path(path)
+    return path
 
 
 @task(name="build_ine_code_lookup")

@@ -1,9 +1,11 @@
 import logging
 from pathlib import Path
 
-import pandas as pd
-
-from minha_regiao.flows.extract_geo.sub_flows.extract_cities.services.FuzzyMatch import DEFAULT_THRESHOLD, resolve_name
+from minha_regiao.flows.extract_geo.services.FuzzyMatch import DEFAULT_THRESHOLD, resolve_name
+from minha_regiao.flows.extract_geo.services.SpreadsheetCodeLookup import (
+    extract_ambiguous_codes_by_name,
+    extract_unique_codes_by_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,20 +38,6 @@ MUNICIPALITY_NAME_ALIASES: dict[str, str] = {
 }
 
 
-def _group_codes_by_name(path: Path) -> dict[str, list[str]]:
-    df = pd.read_excel(path, sheet_name=CONCELHO_SHEET_NAME, header=HEADER_ROW, dtype={CODE_COLUMN: str})
-    df = df.dropna(subset=[CODE_COLUMN, NAME_COLUMN])
-    df = df[df[CODE_COLUMN].str.match(MUNICIPALITY_CODE_PATTERN)]
-
-    codes_by_name: dict[str, list[str]] = {}
-    for _, row in df.iterrows():
-        name = str(row[NAME_COLUMN]).strip()
-        code = str(row[CODE_COLUMN]).strip()
-        codes_by_name.setdefault(name, []).append(code)
-
-    return codes_by_name
-
-
 def extract_ine_codes_by_municipality(path: Path) -> dict[str, str]:
     """Maps municipality name to INE code using the concelho sheet of an election results spreadsheet.
 
@@ -58,19 +46,16 @@ def extract_ine_codes_by_municipality(path: Path) -> dict[str, str]:
     those are left out here and handled separately via
     `extract_ambiguous_ine_codes_by_municipality`.
     """
-    codes_by_name = _group_codes_by_name(path)
-
-    ambiguous = {name: codes for name, codes in codes_by_name.items() if len(codes) > 1}
-    if ambiguous:
-        logger.warning(f"Municipality names that map to more than one INE code: {ambiguous}")
-
-    return {name: codes[0] for name, codes in codes_by_name.items() if len(codes) == 1}
+    return extract_unique_codes_by_name(
+        path, CONCELHO_SHEET_NAME, HEADER_ROW, CODE_COLUMN, NAME_COLUMN, MUNICIPALITY_CODE_PATTERN
+    )
 
 
 def extract_ambiguous_ine_codes_by_municipality(path: Path) -> dict[str, list[str]]:
     """Maps each nationally ambiguous municipality name to its candidate INE codes."""
-    codes_by_name = _group_codes_by_name(path)
-    return {name: codes for name, codes in codes_by_name.items() if len(codes) > 1}
+    return extract_ambiguous_codes_by_name(
+        path, CONCELHO_SHEET_NAME, HEADER_ROW, CODE_COLUMN, NAME_COLUMN, MUNICIPALITY_CODE_PATTERN
+    )
 
 
 def _resolve_region_hint_code(hint: str, candidate_codes: list[str]) -> str | None:

@@ -50,6 +50,7 @@ def assign(references: list[DistrictReference]) -> int:
 
 @task(name="fetch_district_wikipedia_urls")
 def fetch_wikipedia_urls() -> dict[str, str | None]:
+    """TODO: not yet called from the flow; wikipedia enrichment is a planned feature."""
     return asyncio.run(fetch_district_wikipedia_urls(geo_settings.database_url))
 
 
@@ -89,8 +90,8 @@ def extract_districts(geo_dataset_repo_id: str = geo_settings.geo_dataset_repo_i
     persist(references)
     updated = assign(references)
 
-    wikipedia_urls_by_name = fetch_wikipedia_urls()
-    records = build_district_dataset_records(references, wikipedia_urls_by_name)
+    # TODO: wikipedia enrichment (fetch_wikipedia_urls) is not wired into the pipeline yet
+    records = build_district_dataset_records(references, {})
     ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
     publish_district_dataset(geo_dataset_repo_id, records)
 
