@@ -31,8 +31,8 @@ independently for local debugging of one half of the pipeline.
 - A Hugging Face token with write access to `minharegiao/portuguese-geo`
   (only needed for the publish step; leave `HF_API_KEY` unset to skip auth
   and let the rest of the flow run against a local/test repo).
-- Install the extras this flow needs: `pip install -e ".[extract_geo]"`
-  (or `.[dev]` for the whole project).
+- Install the extras this flow needs: `uv sync --extra extract_geo`
+  (or `--extra dev` for the whole project).
 
 ## Configuration
 
