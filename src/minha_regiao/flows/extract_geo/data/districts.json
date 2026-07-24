@@ -1,0 +1,22 @@
+[
+    {"name": "Aveiro", "ine_prefix": "01"},
+    {"name": "Beja", "ine_prefix": "02"},
+    {"name": "Braga", "ine_prefix": "03"},
+    {"name": "Bragança", "ine_prefix": "04"},
+    {"name": "Castelo Branco", "ine_prefix": "05"},
+    {"name": "Coimbra", "ine_prefix": "06"},
+    {"name": "Évora", "ine_prefix": "07"},
+    {"name": "Faro", "ine_prefix": "08"},
+    {"name": "Guarda", "ine_prefix": "09"},
+    {"name": "Leiria", "ine_prefix": "10"},
+    {"name": "Lisboa", "ine_prefix": "11"},
+    {"name": "Portalegre", "ine_prefix": "12"},
+    {"name": "Porto", "ine_prefix": "13"},
+    {"name": "Santarém", "ine_prefix": "14"},
+    {"name": "Setúbal", "ine_prefix": "15"},
+    {"name": "Viana do Castelo", "ine_prefix": "16"},
+    {"name": "Vila Real", "ine_prefix": "17"},
+    {"name": "Viseu", "ine_prefix": "18"},
+    {"name": "Madeira", "ine_prefix": "3"},
+    {"name": "Açores", "ine_prefix": "4"}
+]

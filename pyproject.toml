@@ -1,59 +1,81 @@
-    [build-system]
+[build-system]
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
 
-    requires = ["setuptools", "setuptools_scm"]
-    build-backend = "setuptools.build_meta"
+[project]
+name = "minha_regiao"
+dynamic = ["version"]
+description = "Minha Regiao"
+readme = "README.md"
 
-    ["project"]
-    name = "minha_regiao"
-    dynamic = ["version"] 
-    description = "Python Package that supports the Minha Região Platform"
-    readme = "README.md"
+authors = [
+    {name = "Rúben Almeida", email = "almeidaruben35@gmail.com"}
+]
+requires-python = ">=3.12"
 
-    authors = [
-        {name = "Rúben Almeida", email = "ruben.f.almeida@inesctec.pt"}
-    ]
-    requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.12.0",
+    "httpx>=0.28.1"
+]
 
-    dependencies = [
-        "prefect>=3.6.21",
-        "requests",
-        "pandas",
-        "beautifulsoup4",
-        "pydantic",
-        "environs",
-        "python-dotenv",
-        "pydantic-settings",
-        "pgvector>=0.4.2",
-        "sqlmodel",
-        "psycopg[binary,pool]",
-    ]
+[project.optional-dependencies]
 
-    [project.optional-dependencies]
+scraping = [
+    "scrapling[fetchers]>=0.4.10",
+    "beautifulsoup4>=4.15.0",
+    "playwright>=1.61.0"
+]
 
-    instructor = [
-        "instructor[openai, google-genai]>=1.14.5"
-    ]
+prefect = [
+    "prefect[docker]>=3.6.12",
+]
 
-    langchain = [
-        "langchain>=1.2.11"
-    ]
+llm = [
+    "google-genai>=2.11.0",
+    "openai>=2.45.0",
+    "langchain-core>=1.4.9",
+]
 
-    ollama = [
-        "ollama>=0.6.1"
-    ]
+extract_election_files = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[llm]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+]
 
-    hugginface = [
-        "huggingface_hub",
-        "datasets"
-    ]
+extract_geo = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+    "pandas>=2.3.0",
+    "openpyxl>=3.1.5",
+    "Levenshtein>=0.27.3",
+]
 
-    dev = [
-        "minha_regiao[ollama, hugginface, langchain, instructor]"
-    ]
+extract_pdms = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "pypdf>=6.14.2",
+    "tqdm>=4.68.4",
+]
 
-    [tool.setuptools.packages.find]
-    where = ["src"]
-    include = ["propostas_civil", "propostas_civil.*"]
-    namespaces = false
+database = [
+    "tortoise-orm[asyncpg]>=1.1.7",
+    "alembic>=1.18.5",
+]
 
-    [tool.setuptools_scm]
+dev = [
+    "minha_regiao[database,extract_geo,extract_election_files,extract_pdms,prefect,scraping]"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["minha_regiao", "minha_regiao.*"]
+namespaces = false
+
+[tool.setuptools_scm]
