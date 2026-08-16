@@ -7,9 +7,9 @@ services:
       POSTGRES_PASSWORD: minha_regiao
       POSTGRES_DB: minha_regiao
     ports:
-      - "5432:5432"
+      - "9001:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - minha_regiao_db:/var/lib/postgresql/data
 
 volumes:
-  pgdata:
+  minha_regiao_db:
