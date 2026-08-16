@@ -32,10 +32,14 @@ class ElectionRawFileUploader:
         paths_in_repo = [self._path_in_repo(election) for election in elections]
 
         semaphore = asyncio.Semaphore(self._MAX_CONCURRENT_DOWNLOADS)
+        contents: list[bytes | None] = [None] * len(elections)
         async with httpx.AsyncClient(follow_redirects=True, timeout=self._DOWNLOAD_TIMEOUT_SECONDS) as client:
-            contents = await asyncio.gather(
-                *(self._download(client, semaphore, election.url) for election in elections)
-            )
+            async with asyncio.TaskGroup() as task_group:
+                for index, election in enumerate(elections):
+                    task_group.create_task(self._download_into(contents, index, client, semaphore, election.url))
+
+        if any(content is None for content in contents):
+            raise RuntimeError("Failed to download all election files")
 
         operations = [
             CommitOperationAdd(path_in_repo=path, path_or_fileobj=content)
@@ -57,6 +61,16 @@ class ElectionRawFileUploader:
             for election, path in zip(elections, paths_in_repo)
         ]
 
+    async def _download_into(
+        self,
+        contents: list[bytes | None],
+        index: int,
+        client: httpx.AsyncClient,
+        semaphore: asyncio.Semaphore,
+        url: str,
+    ) -> None:
+        contents[index] = await self._download(client, semaphore, url)
+
     def _path_in_repo(self, election: StructuredElection) -> str:
         return f"{self._raw_files_dir}/{election.type}/{election.filename}"
 
@@ -67,7 +81,9 @@ class ElectionRawFileUploader:
                     response = await client.get(url)
                     response.raise_for_status()
                     return response.content
-                except httpx.TransportError:
+                except (httpx.TransportError, httpx.HTTPStatusError) as error:
+                    if isinstance(error, httpx.HTTPStatusError) and not self._is_retryable_status(error):
+                        raise
                     if attempt == self._MAX_RETRIES:
                         raise
                     logger.warning(
@@ -77,3 +93,7 @@ class ElectionRawFileUploader:
                     await asyncio.sleep(self._RETRY_DELAY_SECONDS)
 
         raise AssertionError("unreachable")  # loop always returns or raises
+
+    @staticmethod
+    def _is_retryable_status(error: httpx.HTTPStatusError) -> bool:
+        return error.response.status_code == 429 or 500 <= error.response.status_code < 600
