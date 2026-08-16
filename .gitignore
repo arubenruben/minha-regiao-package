@@ -210,3 +210,5 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,git
+src/minha_regiao/flows/file_fetching/construction/cache/pdm_results.json
+src/minha_regiao/flows/file_fetching/construction/cache/pdm_results.json.tmp
