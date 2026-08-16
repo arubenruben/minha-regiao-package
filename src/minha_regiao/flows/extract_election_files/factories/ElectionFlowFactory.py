@@ -18,11 +18,11 @@ class ElectionFlowFactory:
         matcher = self._matcher
 
         @task(name=f"fetch_{domain}_page")
-        def fetch_page(url: str):
+        async def fetch_page(url: str):
             logger = get_run_logger()
             logger.info(f"Fetching {domain} elections page from {url}")
 
-            page = StealthyFetcher.fetch(url, headless=True, network_idle=True)
+            page = await StealthyFetcher.async_fetch(url, headless=True, network_idle=True)
 
             logger.info(f"Fetched {domain} elections page")
             return page
@@ -48,10 +48,10 @@ class ElectionFlowFactory:
             return elections
 
         @flow(name=f"{domain}_elections")
-        def election_flow(url: str) -> list[Election]:
+        async def election_flow(url: str) -> list[Election]:
             logger = get_run_logger()
 
-            page = fetch_page(url)
+            page = await fetch_page(url)
             hrefs = extract_file_links(page)
             elections = build_elections(hrefs, url)
 

@@ -35,6 +35,8 @@ llm = [
     "google-genai>=2.11.0",
     "openai>=2.45.0",
     "langchain-core>=1.4.9",
+    "instructor[google-genai]>=1.15.4",
+    "tenacity>=9.1.4",
 ]
 
 extract_election_files = [
@@ -45,8 +47,29 @@ extract_election_files = [
     "huggingface-hub>=1.23.0",
 ]
 
-extract_cities = [
+extract_geo = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+    "pandas>=2.3.0",
+    "openpyxl>=3.1.5",
+    "Levenshtein>=0.27.3",
+]
 
+extract_pdms = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "pypdf>=6.14.2",
+    "tqdm>=4.68.4",
+]
+
+parse_election_files = [
+    "minha_regiao[prefect]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
 ]
 
 database = [
@@ -55,7 +78,7 @@ database = [
 ]
 
 dev = [
-    "minha_regiao[database,extract_cities,extract_election_files,prefect,scraping]"
+    "minha_regiao[database,extract_geo,extract_election_files,extract_pdms,parse_election_files,prefect,scraping]"
 ]
 
 [tool.setuptools.packages.find]

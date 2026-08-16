@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import httpx
@@ -17,17 +18,28 @@ class ElectionRawFileUploader:
     avoids a commit/lock round-trip per file.
     """
 
+    _MAX_RETRIES = 3
+    _RETRY_DELAY_SECONDS = 5
+    _DOWNLOAD_TIMEOUT_SECONDS = 180
+    _MAX_CONCURRENT_DOWNLOADS = 5
+
     def __init__(self, api: HfApi, repo_id: str, raw_files_dir: str = "raw"):
         self._api = api
         self._repo_id = repo_id
         self._raw_files_dir = raw_files_dir
 
-    def upload(self, elections: list[StructuredElection]) -> list[StructuredElection]:
+    async def upload(self, elections: list[StructuredElection]) -> list[StructuredElection]:
         paths_in_repo = [self._path_in_repo(election) for election in elections]
 
+        semaphore = asyncio.Semaphore(self._MAX_CONCURRENT_DOWNLOADS)
+        async with httpx.AsyncClient(follow_redirects=True, timeout=self._DOWNLOAD_TIMEOUT_SECONDS) as client:
+            contents = await asyncio.gather(
+                *(self._download(client, semaphore, election.url) for election in elections)
+            )
+
         operations = [
-            CommitOperationAdd(path_in_repo=path, path_or_fileobj=self._download(election.url))
-            for election, path in zip(elections, paths_in_repo)
+            CommitOperationAdd(path_in_repo=path, path_or_fileobj=content)
+            for content, path in zip(contents, paths_in_repo)
         ]
 
         logger.info(f"Uploading {len(operations)} raw election files to {self._repo_id}")
@@ -48,7 +60,20 @@ class ElectionRawFileUploader:
     def _path_in_repo(self, election: StructuredElection) -> str:
         return f"{self._raw_files_dir}/{election.type}/{election.filename}"
 
-    def _download(self, url: str) -> bytes:
-        response = httpx.get(url, follow_redirects=True, timeout=60)
-        response.raise_for_status()
-        return response.content
+    async def _download(self, client: httpx.AsyncClient, semaphore: asyncio.Semaphore, url: str) -> bytes:
+        async with semaphore:
+            for attempt in range(1, self._MAX_RETRIES + 1):
+                try:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    return response.content
+                except httpx.TransportError:
+                    if attempt == self._MAX_RETRIES:
+                        raise
+                    logger.warning(
+                        f"Transient error downloading {url}, retrying in {self._RETRY_DELAY_SECONDS}s "
+                        f"(attempt {attempt}/{self._MAX_RETRIES})"
+                    )
+                    await asyncio.sleep(self._RETRY_DELAY_SECONDS)
+
+        raise AssertionError("unreachable")  # loop always returns or raises
