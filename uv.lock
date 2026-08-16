@@ -1746,6 +1746,11 @@ llm = [
     { name = "openai" },
     { name = "tenacity" },
 ]
+parse-election-files = [
+    { name = "datasets" },
+    { name = "huggingface-hub" },
+    { name = "prefect", extra = ["docker"] },
+]
 prefect = [
     { name = "prefect", extra = ["docker"] },
 ]
@@ -1761,20 +1766,23 @@ requires-dist = [
     { name = "beautifulsoup4", marker = "extra == 'scraping'", specifier = ">=4.15.0" },
     { name = "datasets", marker = "extra == 'extract-election-files'", specifier = ">=5.0.0" },
     { name = "datasets", marker = "extra == 'extract-geo'", specifier = ">=5.0.0" },
+    { name = "datasets", marker = "extra == 'parse-election-files'", specifier = ">=5.0.0" },
     { name = "google-genai", marker = "extra == 'llm'", specifier = ">=2.11.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "huggingface-hub", marker = "extra == 'extract-election-files'", specifier = ">=1.23.0" },
     { name = "huggingface-hub", marker = "extra == 'extract-geo'", specifier = ">=1.23.0" },
+    { name = "huggingface-hub", marker = "extra == 'parse-election-files'", specifier = ">=1.23.0" },
     { name = "instructor", extras = ["google-genai"], marker = "extra == 'llm'", specifier = ">=1.15.4" },
     { name = "langchain-core", marker = "extra == 'llm'", specifier = ">=1.4.9" },
     { name = "levenshtein", marker = "extra == 'extract-geo'", specifier = ">=0.27.3" },
     { name = "minha-regiao", extras = ["database"], marker = "extra == 'extract-geo'" },
     { name = "minha-regiao", extras = ["database"], marker = "extra == 'extract-pdms'" },
-    { name = "minha-regiao", extras = ["database", "extract-election-files", "extract-geo", "extract-pdms", "prefect", "scraping"], marker = "extra == 'dev'" },
+    { name = "minha-regiao", extras = ["database", "extract-election-files", "extract-geo", "extract-pdms", "parse-election-files", "prefect", "scraping"], marker = "extra == 'dev'" },
     { name = "minha-regiao", extras = ["llm"], marker = "extra == 'extract-election-files'" },
     { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'extract-election-files'" },
     { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'extract-geo'" },
     { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'extract-pdms'" },
+    { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'parse-election-files'" },
     { name = "minha-regiao", extras = ["scraping"], marker = "extra == 'extract-election-files'" },
     { name = "minha-regiao", extras = ["scraping"], marker = "extra == 'extract-geo'" },
     { name = "minha-regiao", extras = ["scraping"], marker = "extra == 'extract-pdms'" },
@@ -1791,7 +1799,7 @@ requires-dist = [
     { name = "tortoise-orm", extras = ["asyncpg"], marker = "extra == 'database'", specifier = ">=1.1.7" },
     { name = "tqdm", marker = "extra == 'extract-pdms'", specifier = ">=4.68.4" },
 ]
-provides-extras = ["scraping", "prefect", "llm", "extract-election-files", "extract-geo", "extract-pdms", "database", "dev"]
+provides-extras = ["scraping", "prefect", "llm", "extract-election-files", "extract-geo", "extract-pdms", "parse-election-files", "database", "dev"]
 
 [[package]]
 name = "msgspec"

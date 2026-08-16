@@ -6,8 +6,11 @@ class ParliamentElectionResult(Model):
     """
     Leaf-level vote tally for one parliament election, scoped to exactly one
     territory: either a parish (mainland/islands) or a consulate (diaspora)
-    — never both, never neither. City/district/country/global totals are
-    aggregates of these rows and are not stored separately.
+    — never both, never neither. Country/global totals are aggregates of
+    these rows and are not stored separately; city- and district-level
+    totals are stored separately as denormalized rollups (see
+    ParliamentElectionCityResult, ParliamentElectionDistrictResult)
+    populated by the ETL for fast scoped queries.
 
     The parish/consulate exclusivity and the one-result-per-territory
     constraints are enforced in the migration (CHECK + partial unique

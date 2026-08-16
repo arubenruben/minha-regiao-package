@@ -2,14 +2,14 @@ from tortoise.models import Model
 from tortoise import fields
 
 
-class PresidentialElectionResult(Model):
+class EuropeanElectionResult(Model):
     """
-    Leaf-level vote tally for one round of a presidential election, scoped to
+    Leaf-level vote tally for one European Parliament election, scoped to
     exactly one territory: either a parish (mainland/islands) or a consulate
     (diaspora) — never both, never neither. Country/global totals are
     aggregates of these rows and are not stored separately; city- and
     district-level totals are stored separately as denormalized rollups
-    (see PresidentialElectionCityResult, PresidentialElectionDistrictResult)
+    (see EuropeanElectionCityResult, EuropeanElectionDistrictResult)
     populated by the ETL for fast scoped queries.
 
     The parish/consulate exclusivity and the one-result-per-territory
@@ -18,9 +18,9 @@ class PresidentialElectionResult(Model):
     """
 
     id = fields.IntField(primary_key=True)
-    election = fields.ForeignKeyField("models.PresidentialElection", related_name="results")
-    parish = fields.ForeignKeyField("models.Parish", related_name="presidential_election_results", null=True)
-    consulate = fields.ForeignKeyField("models.Consulate", related_name="presidential_election_results", null=True)
+    election = fields.ForeignKeyField("models.EuropeanElection", related_name="results")
+    parish = fields.ForeignKeyField("models.Parish", related_name="european_election_results", null=True)
+    consulate = fields.ForeignKeyField("models.Consulate", related_name="european_election_results", null=True)
     registered_voters = fields.IntField()
     voters = fields.IntField()
     blank_votes = fields.IntField()
@@ -28,7 +28,7 @@ class PresidentialElectionResult(Model):
     valid_votes = fields.IntField()
 
     class Meta:
-        table = "presidential_election_result"
+        table = "european_election_result"
 
     def __str__(self) -> str:
         return f"{self.election_id} - {self.parish_id or self.consulate_id}"

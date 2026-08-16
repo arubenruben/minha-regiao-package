@@ -66,13 +66,19 @@ extract_pdms = [
     "tqdm>=4.68.4",
 ]
 
+parse_election_files = [
+    "minha_regiao[prefect]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+]
+
 database = [
     "tortoise-orm[asyncpg]>=1.1.7",
     "alembic>=1.18.5",
 ]
 
 dev = [
-    "minha_regiao[database,extract_geo,extract_election_files,extract_pdms,prefect,scraping]"
+    "minha_regiao[database,extract_geo,extract_election_files,extract_pdms,parse_election_files,prefect,scraping]"
 ]
 
 [tool.setuptools.packages.find]
