@@ -1,6 +1,6 @@
 # Prefect flow conventions
 
-Rules for everything under `packages/` (excluding the shared `minha_regiao` core package).
+Rules for everything under `flows/`.
 
 ## Tag-based concurrency is mandatory for fan-out
 
