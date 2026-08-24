@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minha_regiao"
+dynamic = ["version"]
+description = "Minha Regiao"
+readme = "README.md"
+
+authors = [
+    {name = "Rúben Almeida", email = "almeidaruben35@gmail.com"}
+]
+requires-python = ">=3.12"
+
+dependencies = [
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.12.0",
+    "httpx>=0.28.1"
+]
+
+[project.optional-dependencies]
+
+scraping = [
+    "scrapling[fetchers]>=0.4.10",
+    "beautifulsoup4>=4.15.0",
+    "playwright>=1.61.0"
+]
+
+prefect = [
+    "prefect[docker]>=3.6.12",
+]
+
+llm = [
+    "google-genai>=2.11.0",
+    "openai>=2.45.0",
+    "langchain-core>=1.4.9",
+    "instructor[google-genai]>=1.15.4",
+    "tenacity>=9.1.4",
+]
+
+extract_election_files = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[llm]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+]
+
+extract_geo = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+    "pandas>=2.3.0",
+    "openpyxl>=3.1.5",
+    "Levenshtein>=0.27.3",
+]
+
+extract_pdms = [
+    "minha_regiao[prefect]",
+    "minha_regiao[scraping]",
+    "minha_regiao[database]",
+    "pypdf>=6.14.2",
+    "tqdm>=4.68.4",
+]
+
+parse_election_files = [
+    "minha_regiao[prefect]",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+]
+
+database = [
+    "tortoise-orm[asyncpg]>=1.1.7",
+    "alembic>=1.18.5",
+]
+
+dev = [
+    "minha_regiao[database,extract_geo,extract_election_files,extract_pdms,parse_election_files,prefect,scraping]"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["minha_regiao", "minha_regiao.*"]
+namespaces = false
+
+[tool.setuptools_scm]
