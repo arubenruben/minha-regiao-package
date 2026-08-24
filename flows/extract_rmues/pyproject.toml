@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "extract_rmues"
+version = "0.1.0"
+description = "Prefect flow: extract RMUE (Regulamento Municipal de Urbanização e Edificação) and fee-regulation documents"
+requires-python = ">=3.12"
+
+dependencies = [
+    "minha_regiao",
+    "prefect[docker]>=3.6.12",
+    "scrapling[fetchers]>=0.4.10",
+]
+
+[tool.uv.sources]
+minha_regiao = { workspace = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false

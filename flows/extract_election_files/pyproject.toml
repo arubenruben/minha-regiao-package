@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "extract_election_files"
+version = "0.1.0"
+description = "Prefect flow: extract and structure Portuguese election result files via LLM-assisted parsing"
+requires-python = ">=3.12"
+
+dependencies = [
+    "minha_regiao",
+    "prefect[docker]>=3.6.12",
+    "scrapling[fetchers]>=0.4.10",
+    "google-genai>=2.11.0",
+    "openai>=2.45.0",
+    "langchain-core>=1.4.9",
+    "instructor[google-genai]>=1.15.4",
+    "tenacity>=9.1.4",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+]
+
+[tool.uv.sources]
+minha_regiao = { workspace = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
