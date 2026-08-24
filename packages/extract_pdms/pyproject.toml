@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "extract_pdms"
+version = "0.1.0"
+description = "Prefect flow: crawl municipal sites and extract PDM (Plano Diretor Municipal) regulation documents"
+requires-python = ">=3.12"
+
+dependencies = [
+    "minha_regiao",
+    "prefect[docker]>=3.6.12",
+    "scrapling[fetchers]>=0.4.10",
+    "pypdf>=6.14.2",
+    "tqdm>=4.68.4",
+]
+
+[tool.uv.sources]
+minha_regiao = { workspace = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false

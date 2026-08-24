@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parse_election_files"
+version = "0.1.0"
+description = "Prefect flow: parse downloaded election result files into structured records"
+requires-python = ">=3.12"
+
+dependencies = [
+    "prefect[docker]>=3.6.12",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false

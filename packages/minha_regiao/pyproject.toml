@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minha_regiao"
+version = "0.1.0"
+description = "Minha Regiao core library: entity models, database access, LLM structured-output strategies, and shared utilities"
+authors = [
+    {name = "Rúben Almeida", email = "almeidaruben35@gmail.com"}
+]
+requires-python = ">=3.12"
+
+dependencies = [
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.12.0",
+    "httpx>=0.28.1",
+    "tortoise-orm[asyncpg]>=1.1.7",
+    "alembic>=1.18.5",
+    "Levenshtein>=0.27.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false

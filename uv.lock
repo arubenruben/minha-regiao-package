@@ -13,6 +13,16 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "extract-election-files",
+    "extract-geo",
+    "extract-pdms",
+    "extract-rmues",
+    "minha-regiao",
+    "parse-election-files",
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
@@ -293,19 +303,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c7/94/1009e248bbfbab11397abca7193bea6626806be9a327d399810d523a07cb/beartype-0.22.9.tar.gz", hash = "sha256:8f82b54aa723a2848a56008d18875f91c1db02c32ef6a62319a002e3e25a975f", size = 1608866, upload-time = "2025-12-13T06:50:30.72Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/cc/18245721fa7747065ab478316c7fea7c74777d07f37ae60db2e84f8172e8/beartype-0.22.9-py3-none-any.whl", hash = "sha256:d16c9bbc61ea14637596c5f6fbff2ee99cbe3573e46a716401734ef50c3060c2", size = 1333658, upload-time = "2025-12-13T06:50:28.266Z" },
-]
-
-[[package]]
-name = "beautifulsoup4"
-version = "4.15.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "soupsieve" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/43/65/318323f98dbee45d42dff61d8f047181bc6f2268a9068cfad035a46be5af/beautifulsoup4-4.15.0.tar.gz", hash = "sha256:288e3ca7d54b06f2ac191970bc275c1939cb46d450b255bf6718b04aa37ab4f7", size = 632571, upload-time = "2026-06-07T16:44:20.453Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/c6/92fcd42f1ba33e1184263f25bfabf3d27c383410470f169e4b8163bf9c17/beautifulsoup4-4.15.0-py3-none-any.whl", hash = "sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9", size = 109924, upload-time = "2026-06-07T16:44:21.566Z" },
 ]
 
 [[package]]
@@ -755,6 +752,100 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/0e/97c33bf5009bdbac74fd2beace167cab3f978feb69cc36f1ef79360d6c4e/exceptiongroup-1.3.1-py3-none-any.whl", hash = "sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598", size = 16740, upload-time = "2025-11-21T23:01:53.443Z" },
+]
+
+[[package]]
+name = "extract-election-files"
+version = "0.1.0"
+source = { editable = "packages/extract_election_files" }
+dependencies = [
+    { name = "datasets" },
+    { name = "google-genai" },
+    { name = "huggingface-hub" },
+    { name = "instructor", extra = ["google-genai"] },
+    { name = "langchain-core" },
+    { name = "minha-regiao" },
+    { name = "openai" },
+    { name = "prefect", extra = ["docker"] },
+    { name = "scrapling", extra = ["fetchers"] },
+    { name = "tenacity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "datasets", specifier = ">=5.0.0" },
+    { name = "google-genai", specifier = ">=2.11.0" },
+    { name = "huggingface-hub", specifier = ">=1.23.0" },
+    { name = "instructor", extras = ["google-genai"], specifier = ">=1.15.4" },
+    { name = "langchain-core", specifier = ">=1.4.9" },
+    { name = "minha-regiao", editable = "packages/minha_regiao" },
+    { name = "openai", specifier = ">=2.45.0" },
+    { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
+    { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
+    { name = "tenacity", specifier = ">=9.1.4" },
+]
+
+[[package]]
+name = "extract-geo"
+version = "0.1.0"
+source = { editable = "packages/extract_geo" }
+dependencies = [
+    { name = "datasets" },
+    { name = "huggingface-hub" },
+    { name = "minha-regiao" },
+    { name = "openpyxl" },
+    { name = "pandas" },
+    { name = "prefect", extra = ["docker"] },
+    { name = "scrapling", extra = ["fetchers"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "datasets", specifier = ">=5.0.0" },
+    { name = "huggingface-hub", specifier = ">=1.23.0" },
+    { name = "minha-regiao", editable = "packages/minha_regiao" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "pandas", specifier = ">=2.3.0" },
+    { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
+    { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
+]
+
+[[package]]
+name = "extract-pdms"
+version = "0.1.0"
+source = { editable = "packages/extract_pdms" }
+dependencies = [
+    { name = "minha-regiao" },
+    { name = "prefect", extra = ["docker"] },
+    { name = "pypdf" },
+    { name = "scrapling", extra = ["fetchers"] },
+    { name = "tqdm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "minha-regiao", editable = "packages/minha_regiao" },
+    { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
+    { name = "pypdf", specifier = ">=6.14.2" },
+    { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
+    { name = "tqdm", specifier = ">=4.68.4" },
+]
+
+[[package]]
+name = "extract-rmues"
+version = "0.1.0"
+source = { editable = "packages/extract_rmues" }
+dependencies = [
+    { name = "minha-regiao" },
+    { name = "prefect", extra = ["docker"] },
+    { name = "scrapling", extra = ["fetchers"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "minha-regiao", editable = "packages/minha_regiao" },
+    { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
+    { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
 ]
 
 [[package]]
@@ -1671,135 +1762,26 @@ wheels = [
 
 [[package]]
 name = "minha-regiao"
-source = { editable = "." }
+version = "0.1.0"
+source = { editable = "packages/minha_regiao" }
 dependencies = [
+    { name = "alembic" },
     { name = "httpx" },
+    { name = "levenshtein" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-]
-
-[package.optional-dependencies]
-database = [
-    { name = "alembic" },
     { name = "tortoise-orm", extra = ["asyncpg"] },
-]
-dev = [
-    { name = "alembic" },
-    { name = "beautifulsoup4" },
-    { name = "datasets" },
-    { name = "google-genai" },
-    { name = "huggingface-hub" },
-    { name = "instructor", extra = ["google-genai"] },
-    { name = "langchain-core" },
-    { name = "levenshtein" },
-    { name = "openai" },
-    { name = "openpyxl" },
-    { name = "pandas" },
-    { name = "playwright" },
-    { name = "prefect", extra = ["docker"] },
-    { name = "pypdf" },
-    { name = "scrapling", extra = ["fetchers"] },
-    { name = "tenacity" },
-    { name = "tortoise-orm", extra = ["asyncpg"] },
-    { name = "tqdm" },
-]
-extract-election-files = [
-    { name = "beautifulsoup4" },
-    { name = "datasets" },
-    { name = "google-genai" },
-    { name = "huggingface-hub" },
-    { name = "instructor", extra = ["google-genai"] },
-    { name = "langchain-core" },
-    { name = "openai" },
-    { name = "playwright" },
-    { name = "prefect", extra = ["docker"] },
-    { name = "scrapling", extra = ["fetchers"] },
-    { name = "tenacity" },
-]
-extract-geo = [
-    { name = "alembic" },
-    { name = "beautifulsoup4" },
-    { name = "datasets" },
-    { name = "huggingface-hub" },
-    { name = "levenshtein" },
-    { name = "openpyxl" },
-    { name = "pandas" },
-    { name = "playwright" },
-    { name = "prefect", extra = ["docker"] },
-    { name = "scrapling", extra = ["fetchers"] },
-    { name = "tortoise-orm", extra = ["asyncpg"] },
-]
-extract-pdms = [
-    { name = "alembic" },
-    { name = "beautifulsoup4" },
-    { name = "playwright" },
-    { name = "prefect", extra = ["docker"] },
-    { name = "pypdf" },
-    { name = "scrapling", extra = ["fetchers"] },
-    { name = "tortoise-orm", extra = ["asyncpg"] },
-    { name = "tqdm" },
-]
-llm = [
-    { name = "google-genai" },
-    { name = "instructor", extra = ["google-genai"] },
-    { name = "langchain-core" },
-    { name = "openai" },
-    { name = "tenacity" },
-]
-parse-election-files = [
-    { name = "datasets" },
-    { name = "huggingface-hub" },
-    { name = "prefect", extra = ["docker"] },
-]
-prefect = [
-    { name = "prefect", extra = ["docker"] },
-]
-scraping = [
-    { name = "beautifulsoup4" },
-    { name = "playwright" },
-    { name = "scrapling", extra = ["fetchers"] },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic", marker = "extra == 'database'", specifier = ">=1.18.5" },
-    { name = "beautifulsoup4", marker = "extra == 'scraping'", specifier = ">=4.15.0" },
-    { name = "datasets", marker = "extra == 'extract-election-files'", specifier = ">=5.0.0" },
-    { name = "datasets", marker = "extra == 'extract-geo'", specifier = ">=5.0.0" },
-    { name = "datasets", marker = "extra == 'parse-election-files'", specifier = ">=5.0.0" },
-    { name = "google-genai", marker = "extra == 'llm'", specifier = ">=2.11.0" },
+    { name = "alembic", specifier = ">=1.18.5" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "huggingface-hub", marker = "extra == 'extract-election-files'", specifier = ">=1.23.0" },
-    { name = "huggingface-hub", marker = "extra == 'extract-geo'", specifier = ">=1.23.0" },
-    { name = "huggingface-hub", marker = "extra == 'parse-election-files'", specifier = ">=1.23.0" },
-    { name = "instructor", extras = ["google-genai"], marker = "extra == 'llm'", specifier = ">=1.15.4" },
-    { name = "langchain-core", marker = "extra == 'llm'", specifier = ">=1.4.9" },
-    { name = "levenshtein", marker = "extra == 'extract-geo'", specifier = ">=0.27.3" },
-    { name = "minha-regiao", extras = ["database"], marker = "extra == 'extract-geo'" },
-    { name = "minha-regiao", extras = ["database"], marker = "extra == 'extract-pdms'" },
-    { name = "minha-regiao", extras = ["database", "extract-election-files", "extract-geo", "extract-pdms", "parse-election-files", "prefect", "scraping"], marker = "extra == 'dev'" },
-    { name = "minha-regiao", extras = ["llm"], marker = "extra == 'extract-election-files'" },
-    { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'extract-election-files'" },
-    { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'extract-geo'" },
-    { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'extract-pdms'" },
-    { name = "minha-regiao", extras = ["prefect"], marker = "extra == 'parse-election-files'" },
-    { name = "minha-regiao", extras = ["scraping"], marker = "extra == 'extract-election-files'" },
-    { name = "minha-regiao", extras = ["scraping"], marker = "extra == 'extract-geo'" },
-    { name = "minha-regiao", extras = ["scraping"], marker = "extra == 'extract-pdms'" },
-    { name = "openai", marker = "extra == 'llm'", specifier = ">=2.45.0" },
-    { name = "openpyxl", marker = "extra == 'extract-geo'", specifier = ">=3.1.5" },
-    { name = "pandas", marker = "extra == 'extract-geo'", specifier = ">=2.3.0" },
-    { name = "playwright", marker = "extra == 'scraping'", specifier = ">=1.61.0" },
-    { name = "prefect", extras = ["docker"], marker = "extra == 'prefect'", specifier = ">=3.6.12" },
+    { name = "levenshtein", specifier = ">=0.27.3" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
-    { name = "pypdf", marker = "extra == 'extract-pdms'", specifier = ">=6.14.2" },
-    { name = "scrapling", extras = ["fetchers"], marker = "extra == 'scraping'", specifier = ">=0.4.10" },
-    { name = "tenacity", marker = "extra == 'llm'", specifier = ">=9.1.4" },
-    { name = "tortoise-orm", extras = ["asyncpg"], marker = "extra == 'database'", specifier = ">=1.1.7" },
-    { name = "tqdm", marker = "extra == 'extract-pdms'", specifier = ">=4.68.4" },
+    { name = "tortoise-orm", extras = ["asyncpg"], specifier = ">=1.1.7" },
 ]
-provides-extras = ["scraping", "prefect", "llm", "extract-election-files", "extract-geo", "extract-pdms", "parse-election-files", "database", "dev"]
 
 [[package]]
 name = "msgspec"
@@ -2166,6 +2148,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/be/d448af7d657d82e1888dd8551f79c6d6fb161080b5b9752d84d910ec2319/pandas-3.0.5-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:b58b1b39d46a5862e3fb18f50d1a201398619d16a0f9f73f57eea5583cf0e63c", size = 11925105, upload-time = "2026-07-22T22:19:21.515Z" },
     { url = "https://files.pythonhosted.org/packages/29/c1/ccb4238212c8c4f496c584f3044d94e0c030ed8e1d68999db46c91c2242f/pandas-3.0.5-cp314-cp314t-win_amd64.whl", hash = "sha256:1c10461f6eeb35d8f05b6184c65c8b9991663b66c46b1d559b682cb34ae7c6ea", size = 10387612, upload-time = "2026-07-22T22:19:24.257Z" },
     { url = "https://files.pythonhosted.org/packages/d2/cf/6a51b2c38980e04c279fd2fa908a1b0982064e860444acfca4ec2e2c8359/pandas-3.0.5-cp314-cp314t-win_arm64.whl", hash = "sha256:3c5015fd1730fbf883647e88068176c839c102cea883ba1769a6f4593bfc1f8c", size = 9509776, upload-time = "2026-07-22T22:19:26.694Z" },
+]
+
+[[package]]
+name = "parse-election-files"
+version = "0.1.0"
+source = { editable = "packages/parse_election_files" }
+dependencies = [
+    { name = "datasets" },
+    { name = "huggingface-hub" },
+    { name = "prefect", extra = ["docker"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "datasets", specifier = ">=5.0.0" },
+    { name = "huggingface-hub", specifier = ">=1.23.0" },
+    { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
 ]
 
 [[package]]
@@ -3331,15 +3330,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
-]
-
-[[package]]
-name = "soupsieve"
-version = "2.9.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d9/38/e12680bbe6b4f8f3d17adcaf38d26850aa756c85cf4a80e79fc12a018fe8/soupsieve-2.9.1.tar.gz", hash = "sha256:c33e6605bbc71dd628b00c632d58ae607c22bade247e52553928f83bbb75b4ba", size = 122261, upload-time = "2026-07-21T16:57:17.452Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0f/2c/437fe806897c2d6cfdc3ee43a18da8bf8e568530a4ae9bac781541ca9896/soupsieve-2.9.1-py3-none-any.whl", hash = "sha256:4f4477399246b7a0c720a88ca2454b11cd6bb9ae4c9d170140786e916776c14c", size = 37404, upload-time = "2026-07-21T16:57:16.421Z" },
 ]
 
 [[package]]
