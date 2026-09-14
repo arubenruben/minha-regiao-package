@@ -24,6 +24,19 @@ async def find_pdms_in_snit(municipalities: list[str]) -> list[PDMRecord]:
     that are a "Plano Diretor Municipal", and resolves each into a
     PDMRecord with its full regulation-document history (metadata only --
     PDF text extraction is a separate sub-flow, see extract_regulation_texts).
+
+    Both tasks here share one AsyncStealthySession (launching a browser per
+    municipality would be far too expensive), so fan-out can't go through
+    Task.map()/.submit(): Prefect's default task runner executes every
+    mapped/submitted async call on its own thread with its own fresh event
+    loop (ThreadPoolTaskRunner.submit -> asyncio.run(...) per call), and a
+    session shared across those breaks (confirmed against extract_pdf_text_task
+    before it was changed to open its own client per call -- see that
+    sub-flow's history). Calling the tasks directly and fanning out with
+    asyncio.gather/as_completed keeps everything on this flow's own event
+    loop, which is safe. This does NOT skip Prefect's tag-based concurrency
+    limits (registered below): the limit is enforced inside task execution
+    itself, regardless of whether the task was submitted or called directly.
     """
     logger = get_run_logger()
 

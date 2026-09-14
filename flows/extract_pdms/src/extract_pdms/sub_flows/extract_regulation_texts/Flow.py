@@ -1,11 +1,11 @@
-import asyncio
 import tempfile
 from pathlib import Path
+from typing import cast
 
-import httpx
-from prefect import flow, get_run_logger
+from prefect import flow, get_run_logger, unmapped
 
 from extract_pdms.schema.PDMRecord import PDMRecord
+from extract_pdms.schema.RegulationDocument import RegulationDocument
 from extract_pdms.services.ConcurrencyLimiter import ensure_concurrency_limit
 from extract_pdms.Settings import settings
 from extract_pdms.sub_flows.extract_regulation_texts.tasks.ExtractPdfText import (
@@ -19,6 +19,9 @@ async def extract_regulation_texts(pdm_records: list[PDMRecord]) -> list[PDMReco
     """Downloads every regulation PDF referenced by `pdm_records` into a
     temp folder (removed once this step finishes, success or not) and
     extracts its text via `extract_pdf_text_task`.
+
+    Fan-out is `.map()`, throttled entirely by the task's own tag-based
+    concurrency limit (registered below) -- no asyncio.gather/Semaphore here.
     """
     logger = get_run_logger()
 
@@ -30,15 +33,20 @@ async def extract_regulation_texts(pdm_records: list[PDMRecord]) -> list[PDMReco
     with tempfile.TemporaryDirectory(prefix="extract_pdms_") as tmp_dir_name:
         tmp_dir = Path(tmp_dir_name)
 
-        async with httpx.AsyncClient() as client:
-            # asyncio.gather (unlike as_completed) preserves input order, so
-            # `extracted` lines up 1:1 with `documents` with no extra bookkeeping.
-            extracted = await asyncio.gather(
-                *(
-                    extract_pdf_text_task(client, tmp_dir, document, settings.pdf_download_timeout_seconds)
-                    for document in documents
-                )
-            )
+        # .map() (like asyncio.gather) preserves input order, so `extracted`
+        # lines up 1:1 with `documents` with no extra bookkeeping. The cast
+        # works around Prefect's Task.map() stub not special-casing async
+        # tasks -- at runtime .result() already returns the awaited
+        # RegulationDocument values, not coroutines. Each mapped call opens
+        # its own httpx client (see extract_pdf_text_task) rather than
+        # sharing one, since Prefect's default task runner executes every
+        # mapped async call on its own event loop.
+        extracted = cast(
+            "list[RegulationDocument]",
+            extract_pdf_text_task.map(
+                unmapped(tmp_dir), documents, unmapped(settings.pdf_download_timeout_seconds)
+            ).result(),
+        )
 
     extracted_iter = iter(extracted)
     updated_records = [

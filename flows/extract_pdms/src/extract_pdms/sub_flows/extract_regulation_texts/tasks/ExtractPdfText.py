@@ -18,7 +18,7 @@ EXTRACT_PDF_TEXT_TAG = "pdm-pdf-extract"
 
 @task(name="extract_pdf_text", tags=[EXTRACT_PDF_TEXT_TAG], persist_result=False)
 async def extract_pdf_text_task(
-    client: httpx.AsyncClient, tmp_dir: Path, document: RegulationDocument, timeout_seconds: float
+    tmp_dir: Path, document: RegulationDocument, timeout_seconds: float
 ) -> RegulationDocument:
     """Downloads `document`'s PDF into `tmp_dir` and extracts its text,
     returning an updated copy. A PDF that downloads and parses fine but
@@ -27,12 +27,20 @@ async def extract_pdf_text_task(
     is returned with `needs_ocr=True` and no text rather than being dropped.
     A download or parse failure is likewise only logged, returning the
     document unchanged.
+
+    Opens its own httpx.AsyncClient rather than taking a shared one: when
+    this task is fanned out via `.map()`, Prefect's default task runner
+    executes each call in its own thread with its own fresh event loop (see
+    ThreadPoolTaskRunner.submit), so a client shared across calls via
+    unmapped() gets used from a different loop than the one it was created
+    on and breaks (confirmed: raises "RuntimeError: Event loop is closed").
     """
     logger = get_run_logger()
     url = str(document.url)
 
     try:
-        pdf_path = await download_pdf(client, url, tmp_dir, timeout_seconds)
+        async with httpx.AsyncClient() as client:
+            pdf_path = await download_pdf(client, url, tmp_dir, timeout_seconds)
     except PdfDownloadError as error:
         logger.error(str(error))
         return document
