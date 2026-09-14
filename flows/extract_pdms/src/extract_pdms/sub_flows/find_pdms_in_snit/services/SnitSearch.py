@@ -1,9 +1,14 @@
-import asyncio
 import json
+import logging
+import re
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from scrapling.fetchers import AsyncStealthySession
-from tqdm import tqdm
+
+import extract_pdms
+
+logger = logging.getLogger(__name__)
 
 SNIT_PORTAL_URL = "https://snit-mais.dgterritorio.gov.pt/portalsnit/"
 SNIT_SEARCH_PATH = "/portalsnit/AdvancedMetadataSearch.WebClient.ashx"
@@ -12,9 +17,23 @@ SNIT_REGULAMENTO_PATH = "/portalsnit/ConfigureCSWHandler.WebClient.ashx"
 
 PDM_TITLE_PREFIX = "Plano Diretor Municipal"
 
+# Resolved against the extract_pdms package root (not this file's own
+# location) so it keeps working regardless of how deep this module is
+# nested under sub_flows/.
 MUNICIPALITIES_FILE = (
-    Path(__file__).with_name("data") / "GetRegionsAndMunicipalitiesAsync.json"
+    Path(extract_pdms.__file__).with_name("data") / "GetRegionsAndMunicipalitiesAsync.json"
 )
+
+# SNIT mirrors dre.pt's own filename convention for regulation PDFs, e.g.
+# "AVISO 3341_2012.pdf", "DECL RET 1190_2014.pdf" or "AVISO 16460_2024_2.pdf"
+# (the trailing "_2" marks a re-published/corrected copy of the same diploma).
+PDF_FILENAME_PATTERN = re.compile(
+    r"^(?P<doc_type>[A-Z]+(?: [A-Z]+)*) (?P<number>\d+)_(?P<year>\d{4})(?:_(?P<suffix>\d+))?$"
+)
+
+
+class PdfUrlParseError(ValueError):
+    """Raised when a SNIT regulation PDF URL doesn't match the expected dre.pt-style filename convention."""
 
 
 def load_municipalities() -> list[str]:
@@ -111,56 +130,60 @@ async def search_municipio(session: AsyncStealthySession, municipio: str) -> dic
     )
 
 
+def parse_pdf_metadata(url: str) -> dict:
+    """Parses the dre.pt-style filename SNIT mirrors for regulation PDFs
+    (e.g. ".../AVISO 3341_2012.pdf", ".../DECL RET 1190_2014.pdf",
+    ".../AVISO 16460_2024_2.pdf") into its document type, number, year and
+    optional revision suffix. Raises PdfUrlParseError on any URL that doesn't
+    match the convention -- the caller must not swallow it.
+    """
+    stem = Path(unquote(urlparse(url).path)).stem
+    match = PDF_FILENAME_PATTERN.match(stem)
+
+    if not match:
+        raise PdfUrlParseError(f"Could not parse PDF filename metadata from URL: {url}")
+
+    return {
+        "url": url,
+        "doc_type": match.group("doc_type"),
+        "number": match.group("number"),
+        "year": int(match.group("year")),
+        "suffix": int(match.group("suffix")) if match.group("suffix") else None,
+    }
+
+
+def build_regulamento_entry(entry: dict) -> dict:
+    """Merges the parsed PDF-filename metadata with the raw lDinRegValues
+    fields SNIT returns for that regulation (publication date, dynamics,
+    publication reference).
+    """
+    return {
+        **parse_pdf_metadata(entry["PDF"]),
+        "data_publicacao": entry.get("DataPublicacao"),
+        "dinamica": entry.get("Dinamica"),
+        "publicacao": entry.get("Publicacao"),
+    }
+
+
 async def fetch_pdm_pdf_urls(
     session: AsyncStealthySession, identifier: str
-) -> list[str]:
+) -> list[dict]:
+    """Fetches every regulation entry for `identifier`, skipping (and
+    logging) any single entry whose PDF URL doesn't match the expected
+    filename convention -- one malformed entry must not discard the rest of
+    an otherwise valid regulation history.
+    """
     payload = await _run_in_page(
         session,
         REGULAMENTO_SCRIPT,
         {"path": SNIT_REGULAMENTO_PATH, "idMetadata": identifier},
     )
-    return [entry["PDF"] for entry in payload["lDinRegValues"]]
 
+    documents: list[dict] = []
+    for entry in payload["lDinRegValues"]:
+        try:
+            documents.append(build_regulamento_entry(entry))
+        except PdfUrlParseError as error:
+            logger.error(f"Skipping regulation document for {identifier}: {error}")
 
-async def main() -> None:
-    municipalities = load_municipalities()
-
-    async with AsyncStealthySession(headless=True, network_idle=True) as session:
-        with tqdm(municipalities, desc="Searching SNIT", unit="city") as progress:
-            for municipio in progress:
-                progress.set_postfix(municipio=municipio)
-                try:
-                    payload = await search_municipio(session, municipio)
-                except Exception:
-                    tqdm.write(f"{municipio}: search failed")
-                    continue
-
-                pdm = next(
-                    (
-                        record
-                        for record in payload.get("results", [])
-                        if record["Type"] == "series"
-                        and record["Title"].startswith(PDM_TITLE_PREFIX)
-                    ),
-                    None,
-                )
-                if pdm is None:
-                    tqdm.write(f"{municipio}: no PDM record")
-                    continue
-
-                try:
-                    pdf_urls = await fetch_pdm_pdf_urls(session, pdm["Identifier"])
-                except Exception:
-                    tqdm.write(f"{municipio}: regulamento lookup failed")
-                    continue
-
-                tqdm.write(f"\n{municipio}: {len(pdf_urls)} PDF(s)")
-
-                for url in pdf_urls:
-                    tqdm.write(f"  - {url}")
-
-                break
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    return documents

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,40 +10,22 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
+    # How many SNIT browser calls (municipality search + per-record
+    # regulamento lookup) can be in flight at once. Both kinds of call share
+    # one AsyncStealthySession, so this also sizes that session's tab pool.
+    snit_concurrency: int = 4
 
-    max_pages_per_site: int = 5_000
-    max_depth: int = 4
+    # How many regulation PDFs can be downloaded/parsed concurrently.
+    pdf_download_concurrency: int = 8
+    pdf_download_timeout_seconds: float = 60.0
 
-    # How many cities (distinct domains) to crawl at once. Safe to raise
-    # since each domain is rate-limited independently of the others.
-    city_concurrency: int = 8
+    # Where the enriched PDM records (with extracted regulation text) are
+    # written as JSON.
+    output_file: Path = Path(__file__).with_name("out") / "pdms.json"
 
-    # How many pages to fetch concurrently within a single site's crawl.
-    # Left at 1 (fully sequential) by default since hitting one domain with
-    # concurrent requests is what triggers rate limiting/403s in the first
-    # place; raise deliberately, per site, once a site is known to tolerate it.
-    site_concurrency: int = 1
-
-    # Minimum delay before each request to a given site, to avoid tripping
-    # rate limits.
-    site_request_delay_seconds: float = 1.0
-
-    # A 403 is treated as rate limiting rather than a hard failure: retried
-    # with exponential backoff (retry_backoff_seconds * 2**attempt) instead
-    # of being given up on immediately.
-    max_retries_on_403: int = 3
-    retry_backoff_seconds: float = 5.0
-
-    # Where downloaded PDM candidates are saved, one subfolder per city.
-    pdm_output_dir: Path = Path(__file__).with_name("out")
-
-    # A downloaded candidate is only accepted as the PDM once it looks like
-    # one: municipal sites link plenty of other regulations that also match
-    # the URL/link-text rules, so this content-level check catches those
-    # false positives.
-    min_pdf_pages: int = 10
-    min_pdm_keyword_hits: int = 5
+    # Where log records (ours and Prefect's) are written to, in addition to
+    # the console. Gitignored -- see extract_pdms/.gitignore.
+    logs_dir: Path = Path(__file__).with_name("logs")
 
 
 settings = Settings()
