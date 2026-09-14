@@ -18,8 +18,8 @@ SNIT_REGULAMENTO_PATH = "/portalsnit/ConfigureCSWHandler.WebClient.ashx"
 PDM_TITLE_PREFIX = "Plano Diretor Municipal"
 
 # Resolved against the extract_pdms package root (not this file's own
-# location) so it keeps working regardless of how deep this module is
-# nested under sub_flows/.
+# location, which is one level down under services/) rather than
+# Path(__file__).with_name("data").
 MUNICIPALITIES_FILE = (
     Path(extract_pdms.__file__).with_name("data") / "GetRegionsAndMunicipalitiesAsync.json"
 )

@@ -1,11 +1,11 @@
 from prefect import get_run_logger, task
 from scrapling.fetchers import AsyncStealthySession
 
-from extract_pdms.sub_flows.find_pdms_in_snit.services import SnitSearch
+from extract_pdms.services import SnitSearch
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
-# (see extract_pdms.sub_flows.find_pdms_in_snit.Flow) so this task, which
-# drives a shared browser session, is capped at the server level.
+# (see extract_pdms.ExtractPDM) so this task, which drives a shared browser
+# session, is capped at the server level.
 SEARCH_MUNICIPIO_TAG = "pdm-snit-search"
 
 

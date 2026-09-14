@@ -3,12 +3,11 @@ from scrapling.fetchers import AsyncStealthySession
 
 from extract_pdms.schema.PDMRecord import PDMRecord
 from extract_pdms.schema.RegulationDocument import RegulationDocument
-from extract_pdms.sub_flows.find_pdms_in_snit.services import SnitSearch
+from extract_pdms.services import SnitSearch
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
-# (see extract_pdms.sub_flows.find_pdms_in_snit.Flow) so this task, which
-# drives the same shared browser session as search_municipio, is capped at
-# the server level.
+# (see extract_pdms.ExtractPDM) so this task, which drives the same shared
+# browser session as search_municipio, is capped at the server level.
 FETCH_REGULATION_DOCUMENTS_TAG = "pdm-snit-regulamento"
 
 
@@ -18,7 +17,7 @@ async def fetch_regulation_documents_task(
 ) -> PDMRecord | None:
     """Resolves a "Plano Diretor Municipal" series `record` into a
     PDMRecord with its full regulation-document history (metadata only --
-    PDF text extraction is a separate sub-flow, see extract_regulation_texts).
+    PDF text extraction happens separately, see extract_pdf_text_task).
     Returns None (rather than raising) if the lookup itself fails, so one
     PDM failing doesn't abort the whole flow.
     """

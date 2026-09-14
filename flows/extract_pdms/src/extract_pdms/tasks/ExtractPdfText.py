@@ -4,7 +4,7 @@ import httpx
 from prefect import get_run_logger, task
 
 from extract_pdms.schema.RegulationDocument import RegulationDocument
-from extract_pdms.sub_flows.extract_regulation_texts.services.PdfTextExtractor import (
+from extract_pdms.services.PdfTextExtractor import (
     PdfDownloadError,
     PdfTextExtractionError,
     download_pdf,
@@ -12,7 +12,7 @@ from extract_pdms.sub_flows.extract_regulation_texts.services.PdfTextExtractor i
 )
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
-# (see extract_pdms.sub_flows.extract_regulation_texts.Flow).
+# (see extract_pdms.ExtractPDM).
 EXTRACT_PDF_TEXT_TAG = "pdm-pdf-extract"
 
 
