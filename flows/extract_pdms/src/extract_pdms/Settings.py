@@ -23,9 +23,5 @@ class Settings(BaseSettings):
     # written as JSON.
     output_file: Path = Path(__file__).with_name("out") / "pdms.json"
 
-    # Where log records (ours and Prefect's) are written to, in addition to
-    # the console. Gitignored -- see extract_pdms/.gitignore.
-    logs_dir: Path = Path(__file__).with_name("logs")
-
 
 settings = Settings()

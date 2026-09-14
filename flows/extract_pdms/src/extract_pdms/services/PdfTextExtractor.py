@@ -1,12 +1,9 @@
-import logging
 from pathlib import Path
 from uuid import uuid4
 
 import httpx
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
-
-logger = logging.getLogger(__name__)
 
 
 class PdfDownloadError(Exception):

@@ -1,14 +1,12 @@
 import json
-import logging
 import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from prefect import get_run_logger
 from scrapling.fetchers import AsyncStealthySession
 
 import extract_pdms
-
-logger = logging.getLogger(__name__)
 
 SNIT_PORTAL_URL = "https://snit-mais.dgterritorio.gov.pt/portalsnit/"
 SNIT_SEARCH_PATH = "/portalsnit/AdvancedMetadataSearch.WebClient.ashx"
@@ -106,16 +104,27 @@ async ({ path, idMetadata }) => {
 """
 
 
-async def _run_in_page(session: AsyncStealthySession, script: str, arg: dict) -> dict:
-    captured: dict = {}
+class _PageEvaluator:
+    """Callable page_action for AsyncStealthySession.fetch(): the library
+    calls it with a single `page` argument, so `script`/`arg` and the
+    captured result are held as attributes instead of a closure.
+    """
 
-    async def page_action(page):
-        captured["result"] = await page.evaluate(script, arg)
+    def __init__(self, script: str, arg: dict) -> None:
+        self.script = script
+        self.arg = arg
+        self.result: dict | None = None
+
+    async def __call__(self, page):
+        self.result = await page.evaluate(self.script, self.arg)
         return page
 
-    await session.fetch(SNIT_PORTAL_URL, page_action=page_action, network_idle=True)
 
-    return json.loads(captured["result"]["text"])
+async def _run_in_page(session: AsyncStealthySession, script: str, arg: dict) -> dict:
+    evaluator = _PageEvaluator(script, arg)
+    await session.fetch(SNIT_PORTAL_URL, page_action=evaluator, network_idle=True)
+
+    return json.loads(evaluator.result["text"])
 
 
 async def search_municipio(session: AsyncStealthySession, municipio: str) -> dict:
@@ -173,6 +182,8 @@ async def fetch_pdm_pdf_urls(
     filename convention -- one malformed entry must not discard the rest of
     an otherwise valid regulation history.
     """
+    logger = get_run_logger()
+
     payload = await _run_in_page(
         session,
         REGULAMENTO_SCRIPT,

@@ -2,32 +2,19 @@ import asyncio
 import json
 import tempfile
 from pathlib import Path
-from typing import cast
 
-from prefect import flow, get_run_logger, unmapped
+from prefect import flow, get_run_logger
 from scrapling.fetchers import AsyncStealthySession
 from tqdm import tqdm
 
 from extract_pdms.schema.PDMRecord import PDMRecord
-from extract_pdms.schema.RegulationDocument import RegulationDocument
 from extract_pdms.services import SnitSearch
 from extract_pdms.services.ConcurrencyLimiter import ensure_concurrency_limit
-from extract_pdms.services.Logging import configure_file_logging
+from extract_pdms.services.MunicipioPipeline import process_municipio
 from extract_pdms.Settings import settings
-from extract_pdms.tasks.ExtractPdfText import (
-    EXTRACT_PDF_TEXT_TAG,
-    extract_pdf_text_task,
-)
-from extract_pdms.tasks.FetchRegulationDocuments import (
-    FETCH_REGULATION_DOCUMENTS_TAG,
-    fetch_regulation_documents_task,
-)
-from extract_pdms.tasks.SearchMunicipio import (
-    SEARCH_MUNICIPIO_TAG,
-    search_municipio_task,
-)
-
-configure_file_logging(settings.logs_dir)
+from extract_pdms.tasks.ExtractPdfText import EXTRACT_PDF_TEXT_TAG
+from extract_pdms.tasks.FetchRegulationDocuments import FETCH_REGULATION_DOCUMENTS_TAG
+from extract_pdms.tasks.SearchMunicipio import SEARCH_MUNICIPIO_TAG
 
 
 def _write_output(pdm_records: list[PDMRecord]) -> None:
@@ -51,27 +38,22 @@ def _write_output(pdm_records: list[PDMRecord]) -> None:
 )
 async def extract_pdms() -> list[PDMRecord]:
     """Streams the whole pipeline per municipality instead of batching by
-    phase: for each municipality (processed concurrently, capped by its own
-    tag-based concurrency limit), search SNIT, resolve its PDM's regulation
-    documents, then immediately extract those documents' text -- so PDF
-    downloads for an already-resolved municipality run concurrently with
-    SNIT lookups still in flight for others, rather than waiting for every
-    municipality to be resolved before any text extraction starts.
+    phase: each municipality's search -> resolve -> extract-text pipeline
+    (see extract_pdms.services.MunicipioPipeline.process_municipio) is
+    fanned out concurrently via asyncio.as_completed, so PDF downloads for
+    an already-resolved municipality run while SNIT lookups are still in
+    flight for others, rather than waiting for every municipality to be
+    resolved before any text extraction starts.
 
-    Two different concurrency mechanisms are combined deliberately:
-      - search_municipio_task/fetch_regulation_documents_task share one
-        AsyncStealthySession (launching a browser per municipality would be
-        far too expensive), so they're called directly and the per-
-        municipality pipelines are fanned out with asyncio.as_completed --
-        this keeps everything on this flow's own event loop, which is safe
-        for a shared live resource. It does NOT skip their tag-based
-        concurrency limits (registered below): the limit is enforced inside
-        task execution itself, regardless of whether a task is submitted or
-        called directly.
-      - extract_pdf_text_task doesn't share a live resource (it opens its
-        own httpx client per call), so within each municipality's pipeline
-        its documents are fanned out with `.map()`, safe to call from
-        inside a coroutine that's itself one of many running concurrently.
+    process_municipio's search/fetch calls share one AsyncStealthySession
+    (launching a browser per municipality would be far too expensive), so
+    they're called directly rather than via .submit()/.map() -- this keeps
+    everything on this flow's own event loop, which is safe for a shared
+    live resource, and still fully respects their tag-based concurrency
+    limits (registered below): the limit is enforced inside task execution
+    itself, regardless of whether a task is submitted or called directly.
+    Its PDF extraction step doesn't share a live resource, so it uses
+    `.map()` instead.
     """
     logger = get_run_logger()
 
@@ -86,40 +68,14 @@ async def extract_pdms() -> list[PDMRecord]:
         tmp_dir = Path(tmp_dir_name)
 
         async with AsyncStealthySession(headless=True, network_idle=True, max_pages=snit_concurrency) as session:
-
-            async def process_municipio(municipio: str) -> list[PDMRecord]:
-                records = await search_municipio_task(session, municipio)
-                pdm_series = [
-                    record
-                    for record in records
-                    if record["Type"] == "series" and record["Title"].startswith(SnitSearch.PDM_TITLE_PREFIX)
-                ]
-
-                results: list[PDMRecord] = []
-                for record in pdm_series:
-                    pdm_record = await fetch_regulation_documents_task(session, municipio, record)
-                    if pdm_record is None:
-                        continue
-
-                    if not pdm_record.documents:
-                        results.append(pdm_record)
-                        continue
-
-                    extracted = cast(
-                        "list[RegulationDocument]",
-                        extract_pdf_text_task.map(
-                            unmapped(tmp_dir),
-                            pdm_record.documents,
-                            unmapped(settings.pdf_download_timeout_seconds),
-                        ).result(),
-                    )
-                    results.append(pdm_record.model_copy(update={"documents": extracted}))
-
-                return results
+            pipeline_coros = [
+                process_municipio(session, tmp_dir, municipio, settings.pdf_download_timeout_seconds)
+                for municipio in municipalities
+            ]
 
             pdm_records: list[PDMRecord] = []
             with tqdm(total=len(municipalities), desc="Processing municipalities", unit="city") as progress:
-                for coro in asyncio.as_completed([process_municipio(m) for m in municipalities]):
+                for coro in asyncio.as_completed(pipeline_coros):
                     pdm_records.extend(await coro)
                     progress.update(1)
 
