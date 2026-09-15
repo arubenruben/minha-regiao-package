@@ -33,7 +33,9 @@ class JsonFileLoader(Generic[RecordT]):
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = self._path.with_suffix(f"{self._path.suffix}.tmp")
 
-        tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp_path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
         for delay in (*_REPLACE_RETRY_DELAYS_SECONDS, None):
             try:
