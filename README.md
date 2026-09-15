@@ -22,12 +22,16 @@ directly from the Hugging Face UI.
 ## 2. I want to reproduce or extend a pipeline
 
 Everything runs in containers — no local Python/browser setup needed.
+This assumes you already have a Prefect instance running somewhere
+(Prefect Cloud, or your own `prefect server start`); `docker compose`
+doesn't start one for you.
 
 ```bash
-# Bring up Postgres and a Prefect server
+# Bring up Postgres
 docker compose up -d
 
-# See the available flows
+# Point at your running Prefect instance, then see the available flows
+export PREFECT_API_URL=http://localhost:4200/api
 docker compose run --rm cli minha-regiao list
 
 # Run one

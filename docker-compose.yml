@@ -1,7 +1,11 @@
 # Reproduce the full pipeline stack with one command: `docker compose up`
-# brings up Postgres and a Prefect server; `docker compose run --rm cli
-# minha-regiao run extract-geo` then runs a flow against them, entirely
-# inside containers -- no local Python/uv/browser setup needed.
+# brings up Postgres; `docker compose run --rm cli minha-regiao run
+# extract-geo` then runs a flow against it, entirely inside containers --
+# no local Python/uv/browser setup needed.
+#
+# This assumes you already have a Prefect instance running somewhere
+# (Prefect Cloud, or your own `prefect server start`) -- this file does not
+# start one for you. Point PREFECT_API_URL at it (see .env.example).
 #
 # This is distinct from dev.docker-compose.yml, which only brings up
 # Postgres for contributors iterating on a flow locally via `uv run`.
@@ -23,26 +27,15 @@ services:
       timeout: 5s
       retries: 10
 
-  prefect-server:
-    image: prefecthq/prefect:3-python3.12
-    restart: unless-stopped
-    command: prefect server start --host 0.0.0.0
-    environment:
-      PREFECT_SERVER_API_HOST: 0.0.0.0
-    ports:
-      - "4200:4200"
-    volumes:
-      - minha_regiao_prefect:/root/.prefect
-
   cli:
     build: .
     depends_on:
       postgres:
         condition: service_healthy
-      prefect-server:
-        condition: service_started
     environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
+      # Point this at your own already-running Prefect instance (Prefect
+      # Cloud, or `prefect server start` elsewhere) -- required, no default.
+      PREFECT_API_URL: ${PREFECT_API_URL:?Set PREFECT_API_URL to your running Prefect instance's API endpoint}
       # Every flow's Settings.py defaults database_url to
       # localhost:9001 -- correct for `uv run` on the host against
       # dev.docker-compose.yml, but inside this container "localhost" is
@@ -60,4 +53,3 @@ services:
 
 volumes:
   minha_regiao_db:
-  minha_regiao_prefect:

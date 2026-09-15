@@ -18,8 +18,10 @@ repo comes from conflating them — keep them separate.
    This audience never needs the API or the database.
 
 2. **"I want to reproduce or extend a pipeline."** — The scientific/OSS
-   reproducibility case. Needs `docker compose up` for Postgres and a
-   Prefect server, and a way to run one flow without memorizing
+   reproducibility case. Needs `docker compose up` for Postgres, a way to
+   point at a Prefect instance they already have running (Prefect Cloud or
+   their own `prefect server start` — this repo does not run one for them),
+   and a way to run one flow without memorizing
    `uv run --package extract_geo python -m extract_geo.ExtractGeo`. This is
    the audience that justifies a CLI entrypoint and containerizing the flows
    — work in `flows/` and any CLI/Docker tooling should be built for this
