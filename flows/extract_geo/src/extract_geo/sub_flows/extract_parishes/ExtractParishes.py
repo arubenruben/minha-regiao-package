@@ -7,9 +7,10 @@ from minha_regiao.entity.City import City
 from minha_regiao.entity.Parish import ParishEra
 from extract_geo.Settings import settings as geo_settings
 from extract_geo.services.DatasetDownloader import download_dataset_file
-from extract_geo.services.DatasetPublisher import DatasetPublisher
 from extract_geo.services.DatasetRepo import ensure_dataset_repo
 from extract_geo.sub_flows.extract_parishes.Settings import settings
+from minha_regiao.loader.DatabaseLoader import DatabaseLoader
+from minha_regiao.loader.HuggingFaceLoader import HuggingFaceLoader
 from extract_geo.sub_flows.extract_parishes.schema.ParishCityLink import ParishCityLink
 from extract_geo.sub_flows.extract_parishes.schema.ParishDatasetRecord import ParishDatasetRecord
 from extract_geo.sub_flows.extract_parishes.services.CityRepository import (
@@ -119,10 +120,11 @@ def link_parishes_to_cities(
 def persist_parishes_task(db_url: str, links: list[ParishCityLink], era: ParishEra) -> int:
     logger = get_run_logger()
 
-    persisted = asyncio.run(persist_parishes(db_url, links, era))
+    loader = DatabaseLoader[ParishCityLink](lambda records: persist_parishes(db_url, records, era))
+    asyncio.run(loader.load(links))
 
-    logger.info(f"Persisted {persisted} {era.value} parishes")
-    return persisted
+    logger.info(f"Persisted {len(links)} {era.value} parishes")
+    return len(links)
 
 
 @task(name="build_parish_dataset_records")
@@ -146,9 +148,10 @@ def build_parish_dataset_records(links: list[ParishCityLink], era: ParishEra) ->
 
 @task(name="publish_parish_dataset")
 def publish_parish_dataset(repo_id: str, records: list[ParishDatasetRecord]) -> None:
-    DatasetPublisher[ParishDatasetRecord](
+    loader = HuggingFaceLoader[ParishDatasetRecord](
         repo_id, geo_settings.hf_api_key, settings.parish_dataset_config_name
-    ).publish(records)
+    )
+    asyncio.run(loader.load(records))
 
 
 @flow(name="Enrich Freguesias PT", description="Enrich Freguesias PT")
@@ -197,28 +200,30 @@ def enrich_freguesias_pt(
         post_2021_ine_codes, cities_by_ine_code, cities_by_name
     )
 
-    persist_parishes_task.with_options(name="persist_pre_2013_parishes")(
-        geo_settings.database_url, pre_2013_links, ParishEra.PRE_2013
-    )
-    persist_parishes_task.with_options(name="persist_post_2013_parishes")(
-        geo_settings.database_url, post_2013_links, ParishEra.POST_2013
-    )
-    persist_parishes_task.with_options(name="persist_post_2021_parishes")(
-        geo_settings.database_url, post_2021_links, ParishEra.POST_2021
-    )
+    if "database" in settings.load_targets:
+        persist_parishes_task.with_options(name="persist_pre_2013_parishes")(
+            geo_settings.database_url, pre_2013_links, ParishEra.PRE_2013
+        )
+        persist_parishes_task.with_options(name="persist_post_2013_parishes")(
+            geo_settings.database_url, post_2013_links, ParishEra.POST_2013
+        )
+        persist_parishes_task.with_options(name="persist_post_2021_parishes")(
+            geo_settings.database_url, post_2021_links, ParishEra.POST_2021
+        )
 
-    pre_2013_records = build_parish_dataset_records.with_options(name="build_pre_2013_parish_dataset_records")(
-        pre_2013_links, ParishEra.PRE_2013
-    )
-    post_2013_records = build_parish_dataset_records.with_options(name="build_post_2013_parish_dataset_records")(
-        post_2013_links, ParishEra.POST_2013
-    )
-    post_2021_records = build_parish_dataset_records.with_options(name="build_post_2021_parish_dataset_records")(
-        post_2021_links, ParishEra.POST_2021
-    )
+    if "huggingface" in settings.load_targets:
+        pre_2013_records = build_parish_dataset_records.with_options(name="build_pre_2013_parish_dataset_records")(
+            pre_2013_links, ParishEra.PRE_2013
+        )
+        post_2013_records = build_parish_dataset_records.with_options(name="build_post_2013_parish_dataset_records")(
+            post_2013_links, ParishEra.POST_2013
+        )
+        post_2021_records = build_parish_dataset_records.with_options(name="build_post_2021_parish_dataset_records")(
+            post_2021_links, ParishEra.POST_2021
+        )
 
-    ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
-    publish_parish_dataset(geo_dataset_repo_id, pre_2013_records + post_2013_records + post_2021_records)
+        ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+        publish_parish_dataset(geo_dataset_repo_id, pre_2013_records + post_2013_records + post_2021_records)
 
 
 if __name__ == "__main__":

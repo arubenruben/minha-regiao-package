@@ -1,2 +1,2 @@
 [tool.uv.workspace]
-members = ["minha_regiao", "flows/*"]
+members = ["minha_regiao", "cli", "flows/*"]

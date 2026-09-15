@@ -7,12 +7,13 @@ from scrapling.fetchers import StealthyFetcher
 
 from extract_geo.Settings import settings as geo_settings
 from extract_geo.services.DatasetDownloader import download_dataset_file
-from extract_geo.services.DatasetPublisher import DatasetPublisher
 from extract_geo.services.DatasetRepo import ensure_dataset_repo
 from extract_geo.services.DistrictReferenceLoader import (
     load_district_references,
     match_district_name,
 )
+from minha_regiao.loader.DatabaseLoader import DatabaseLoader
+from minha_regiao.loader.HuggingFaceLoader import HuggingFaceLoader
 from minha_regiao.utils.FuzzyMatch import resolve_name
 from extract_geo.sub_flows.extract_cities.Settings import settings
 from extract_geo.sub_flows.extract_cities.schema.CityContacts import CityContacts
@@ -151,9 +152,10 @@ def persist_city_contacts(contacts: list[CityContacts]) -> list[CityContacts]:
     if skipped:
         logger.warning(f"Skipping {skipped} city contacts with no INE code (cannot upsert without a key)")
 
-    persisted = asyncio.run(persist_cities(geo_settings.database_url, matched))
+    loader = DatabaseLoader[CityContacts](lambda records: persist_cities(geo_settings.database_url, records))
+    asyncio.run(loader.load(matched))
 
-    logger.info(f"Persisted {persisted} cities")
+    logger.info(f"Persisted {len(matched)} cities")
     return contacts
 
 
@@ -192,9 +194,8 @@ def build_city_dataset_records(contacts: list[CityContacts]) -> list[CityDataset
 
 @task(name="publish_city_dataset")
 def publish_city_dataset(repo_id: str, records: list[CityDatasetRecord]) -> None:
-    DatasetPublisher[CityDatasetRecord](repo_id, geo_settings.hf_api_key, settings.city_dataset_config_name).publish(
-        records
-    )
+    loader = HuggingFaceLoader[CityDatasetRecord](repo_id, geo_settings.hf_api_key, settings.city_dataset_config_name)
+    asyncio.run(loader.load(records))
 
 
 @flow(
@@ -225,11 +226,14 @@ def extract_cities(
         presidential_election_results_path
     )
     contacts = attach_ine_codes(contacts, ine_codes_by_municipality, ambiguous_ine_codes_by_municipality)
-    contacts = persist_city_contacts(contacts)
 
-    records = build_city_dataset_records(contacts)
-    ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
-    publish_city_dataset(geo_dataset_repo_id, records)
+    if "database" in settings.load_targets:
+        contacts = persist_city_contacts(contacts)
+
+    if "huggingface" in settings.load_targets:
+        records = build_city_dataset_records(contacts)
+        ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+        publish_city_dataset(geo_dataset_repo_id, records)
 
     return contacts
 

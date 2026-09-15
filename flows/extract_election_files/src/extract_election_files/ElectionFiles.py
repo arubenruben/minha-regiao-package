@@ -10,10 +10,11 @@ from extract_election_files.Settings import settings
 from extract_election_files.schema.Election import Election
 from extract_election_files.schema.MAIWebpage import MAIWebpage
 from extract_election_files.schema.StructuredElection import StructuredElection
-from extract_election_files.services.ElectionDatasetPublisher import ElectionDatasetPublisher
 from extract_election_files.services.ElectionMetadataExtractor import ElectionMetadataExtractor
 from extract_election_files.services.ElectionRawFileUploader import ElectionRawFileUploader
 from minha_regiao.llm.OpenAIStructuredOutputStrategy import OpenAIStructuredOutputStrategy
+from minha_regiao.loader.HuggingFaceLoader import HuggingFaceLoader
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 from extract_election_files.sub_flows.european_elections.EuropeanElections import (
     european_elections,
 )
@@ -155,7 +156,16 @@ async def upload_raw_election_files(
 
 @task(name="publish_election_dataset")
 def publish_election_dataset(repo_id: str, token: str, config_name: str, elections: list[StructuredElection]) -> None:
-    ElectionDatasetPublisher(repo_id, token, config_name).publish(elections)
+    asyncio.run(HuggingFaceLoader[StructuredElection](repo_id, token, config_name).load(elections))
+
+
+@task(name="write_election_files_json")
+async def write_election_files_json(elections: list[StructuredElection]) -> None:
+    logger = get_run_logger()
+
+    await JsonFileLoader[StructuredElection](settings.output_file).load(elections)
+
+    logger.info(f"Wrote {len(elections)} election records to {settings.output_file}")
 
 
 @flow(name="fetch_election_files", description="Fetch election files from the specified base URL.")
@@ -183,11 +193,16 @@ async def fetch_election_files() -> list[StructuredElection]:
     elections = reduce_election_files(results)
     structured = await structure_election_files(elections)
 
-    ensure_hf_dataset_repo(api, settings.hf_dataset_repo_id)
-    structured_with_raw_files = await upload_raw_election_files(api, settings.hf_dataset_repo_id, structured)
-    publish_election_dataset(
-        settings.hf_dataset_repo_id, settings.hf_api_key, HF_DATASET_CONFIG_NAME, structured_with_raw_files
-    )
+    structured_with_raw_files = structured
+    if "huggingface" in settings.load_targets:
+        ensure_hf_dataset_repo(api, settings.hf_dataset_repo_id)
+        structured_with_raw_files = await upload_raw_election_files(api, settings.hf_dataset_repo_id, structured)
+        publish_election_dataset(
+            settings.hf_dataset_repo_id, settings.hf_api_key, HF_DATASET_CONFIG_NAME, structured_with_raw_files
+        )
+
+    if "json" in settings.load_targets:
+        await write_election_files_json(structured_with_raw_files)
 
     return structured_with_raw_files
 

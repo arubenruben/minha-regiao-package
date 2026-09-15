@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +17,10 @@ class Settings(BaseSettings):
     election_results_dataset_repo_id: str = "minharegiao/portuguese-elections"
     presidential_election_results_filename: str = "raw/presidential/PR_2026_Globais.xlsx"
     city_dataset_config_name: str = "cities"
+
+    # Which sinks the flow writes to at the end of its run. Defaults to
+    # both, matching this flow's original (pre-Loader) behavior exactly.
+    load_targets: list[Literal["database", "huggingface"]] = ["database", "huggingface"]
 
 
 settings = Settings()

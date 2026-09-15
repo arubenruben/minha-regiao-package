@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,6 +32,13 @@ class Settings(BaseSettings):
     # Where the enriched PDM records (with extracted regulation text) are
     # written as JSON.
     output_file: Path = Path(__file__).with_name("out") / "pdms.json"
+
+    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
+
+    # Which sinks the flow writes its PDM records to at the end of the run.
+    # Defaults to JSON only, matching this flow's original (pre-Loader)
+    # behavior exactly -- extract_pdms has no database persistence today.
+    load_targets: list[Literal["database", "json"]] = ["json"]
 
 
 settings = Settings()

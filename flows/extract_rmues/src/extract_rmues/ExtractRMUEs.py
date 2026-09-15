@@ -15,6 +15,8 @@ from extract_rmues.services.RMURepository import (
     persist_rmue_regulations,
     update_pdf_urls,
 )
+from minha_regiao.loader.DatabaseLoader import DatabaseLoader
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 
 # How many DR detail pages to resolve per batch, and concurrently within
 # that batch, through a single shared browser (as tabs in its page pool).
@@ -49,15 +51,34 @@ async def parse_rmue_page(page: Selector) -> list[RMUERegulation]:
 async def persist_rmue_page(entries: list[RMUERegulation]) -> int:
     logger = get_run_logger()
 
-    persisted, unmatched_cities, skipped_documents = await persist_rmue_regulations(settings.database_url, entries)
+    persisted_count = 0
 
-    logger.info(f"Persisted {persisted} regulation documents")
-    if unmatched_cities:
-        logger.warning(f"Unmatched municipalities: {sorted(unmatched_cities)}")
-    if skipped_documents:
-        logger.warning(f"Skipped documents (no parseable year): {sorted(skipped_documents)}")
+    async def _persist(records: list[RMUERegulation]) -> int:
+        nonlocal persisted_count
+        persisted, unmatched_cities, skipped_documents = await persist_rmue_regulations(
+            settings.database_url, records
+        )
 
-    return persisted
+        logger.info(f"Persisted {persisted} regulation documents")
+        if unmatched_cities:
+            logger.warning(f"Unmatched municipalities: {sorted(unmatched_cities)}")
+        if skipped_documents:
+            logger.warning(f"Skipped documents (no parseable year): {sorted(skipped_documents)}")
+
+        persisted_count = persisted
+        return persisted
+
+    await DatabaseLoader[RMUERegulation](_persist).load(entries)
+    return persisted_count
+
+
+@task(name="write_rmue_entries_json")
+async def write_rmue_page_json(entries: list[RMUERegulation]) -> None:
+    logger = get_run_logger()
+
+    await JsonFileLoader[RMUERegulation](settings.output_file).load(entries)
+
+    logger.info(f"Wrote {len(entries)} RMUE entries to {settings.output_file}")
 
 
 @task(name="find_documents_missing_pdf_url")
@@ -110,7 +131,11 @@ async def resolve_pdf_urls(documents: list[PendingDocument]) -> int:
 async def extract_rmues(base_url: str) -> int:
     page = await fetch_rmue_page(base_url)
     entries = await parse_rmue_page(page)
-    await persist_rmue_page(entries)
+
+    if "database" in settings.load_targets:
+        await persist_rmue_page(entries)
+    if "json" in settings.load_targets:
+        await write_rmue_page_json(entries)
 
     pending_documents = await find_pending_documents()
     return await resolve_pdf_urls(pending_documents)

@@ -18,6 +18,8 @@ dependencies = [
     "tortoise-orm[asyncpg]>=1.1.7",
     "alembic>=1.18.5",
     "Levenshtein>=0.27.3",
+    "datasets>=5.0.0",
+    "huggingface-hub>=1.23.0",
 ]
 
 [tool.setuptools.packages.find]
