@@ -3,7 +3,7 @@ from pathlib import Path
 import httpx
 from prefect import get_run_logger, task
 
-from extract_pdms.schema.RegulationDocument import RegulationDocument
+from extract_pdms.schema.RegulationDocument import DocumentStatus, RegulationDocument
 from extract_pdms.services.PdfTextExtractor import (
     PdfDownloadError,
     PdfTextExtractionError,
@@ -21,12 +21,14 @@ async def extract_pdf_text_task(
     tmp_dir: Path, document: RegulationDocument, timeout_seconds: float
 ) -> RegulationDocument:
     """Downloads `document`'s PDF into `tmp_dir` and extracts its text,
-    returning an updated copy. A PDF that downloads and parses fine but
-    yields no text at all is an old, scanned regulation that needs OCR --
-    until OCR support exists, that's only logged as an error; the document
-    is returned with `needs_ocr=True` and no text rather than being dropped.
-    A download or parse failure is likewise only logged, returning the
-    document unchanged.
+    returning an updated copy with `status` set to record the outcome --
+    `text` is left null whenever `status` isn't OK, since there's nothing
+    to report for a file that couldn't be read.
+
+    A PDF that downloads and parses fine but yields no text at all is an
+    old, scanned regulation that needs OCR -- until OCR support exists,
+    that's recorded as NEEDS_OCR rather than attempted. A download or parse
+    failure is recorded as DOWNLOAD_FAILED / EXTRACTION_FAILED respectively.
 
     Opens its own httpx.AsyncClient rather than taking a shared one: when
     this task is fanned out via `.map()`, Prefect's default task runner
@@ -43,23 +45,23 @@ async def extract_pdf_text_task(
             pdf_path = await download_pdf(client, url, tmp_dir, timeout_seconds)
     except PdfDownloadError as error:
         logger.error(str(error))
-        return document
+        return document.model_copy(update={"status": DocumentStatus.DOWNLOAD_FAILED, "text": None})
 
     try:
         text = extract_text(pdf_path)
     except PdfTextExtractionError as error:
         logger.error(str(error))
-        return document
+        return document.model_copy(update={"status": DocumentStatus.EXTRACTION_FAILED, "text": None})
     finally:
         pdf_path.unlink(missing_ok=True)
 
     if not text:
         # TODO: once OCR support exists, route through it here instead of
-        # just logging.
+        # just recording NEEDS_OCR.
         logger.error(
             f"No extractable text in {url} ({document.doc_type} "
             f"{document.number}/{document.year}) -- likely a scanned/old PDF that needs OCR"
         )
-        return document.model_copy(update={"needs_ocr": True})
+        return document.model_copy(update={"status": DocumentStatus.NEEDS_OCR, "text": None})
 
-    return document.model_copy(update={"text": text})
+    return document.model_copy(update={"status": DocumentStatus.OK, "text": text})

@@ -34,6 +34,15 @@ class PdfUrlParseError(ValueError):
     """Raised when a SNIT regulation PDF URL doesn't match the expected dre.pt-style filename convention."""
 
 
+class SnitPageActionError(RuntimeError):
+    """Raised when the portal page doesn't produce a result for our
+    page_action -- e.g. scrapling itself logs a page_action failure (seen in
+    practice as the portal serving an error page with no __wc_csrfToken
+    element, most likely anti-bot/rate-limiting) and swallows it, leaving
+    the page in an unusable state instead of propagating the failure.
+    """
+
+
 def load_municipalities() -> list[str]:
     regions = json.loads(MUNICIPALITIES_FILE.read_text(encoding="utf-8"))
     return [
@@ -123,6 +132,9 @@ class _PageEvaluator:
 async def _run_in_page(session: AsyncStealthySession, script: str, arg: dict) -> dict:
     evaluator = _PageEvaluator(script, arg)
     await session.fetch(SNIT_PORTAL_URL, page_action=evaluator, network_idle=True)
+
+    if evaluator.result is None:
+        raise SnitPageActionError(f"No result from page_action against {SNIT_PORTAL_URL} -- portal page likely failed to load")
 
     return json.loads(evaluator.result["text"])
 

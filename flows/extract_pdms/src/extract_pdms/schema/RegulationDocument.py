@@ -1,4 +1,20 @@
+from enum import Enum
+
 from pydantic import BaseModel, HttpUrl
+
+
+class DocumentStatus(str, Enum):
+    """Outcome of a regulation PDF's download/text-extraction step."""
+
+    # Not yet attempted -- e.g. freshly resolved from SNIT metadata, or
+    # reused unchanged from a previous run's not-yet-processed record.
+    PENDING = "pending"
+    OK = "ok"
+    # Downloaded and parsed fine but yielded no text at all: an old,
+    # scanned regulation that needs OCR (not yet supported).
+    NEEDS_OCR = "needs_ocr"
+    DOWNLOAD_FAILED = "download_failed"
+    EXTRACTION_FAILED = "extraction_failed"
 
 
 class RegulationDocument(BaseModel):
@@ -17,6 +33,8 @@ class RegulationDocument(BaseModel):
     dinamica: str | None = None
     publicacao: str | None = None
 
-    # Populated by the PDF-download/text-extraction step.
+    # Populated by the PDF-download/text-extraction step. `text` is null
+    # whenever `status` isn't OK -- the file couldn't be read, so there's
+    # nothing to report for it.
+    status: DocumentStatus = DocumentStatus.PENDING
     text: str | None = None
-    needs_ocr: bool = False
