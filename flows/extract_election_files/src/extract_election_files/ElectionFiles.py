@@ -172,8 +172,14 @@ async def write_election_files_json(elections: list[StructuredElection]) -> None
 async def fetch_election_files() -> list[StructuredElection]:
     logger = get_run_logger()
 
-    api = HfApi(token=settings.hf_api_key)
-    ensure_huggingface_login(api)
+    api: HfApi | None = None
+    if "huggingface" in settings.load_targets:
+        if not settings.hf_api_key or not settings.hf_dataset_repo_id:
+            raise ValueError(
+                "HF_API_KEY and HF_DATASET_REPO_ID are required when 'huggingface' is in LOAD_TARGETS"
+            )
+        api = HfApi(token=settings.hf_api_key)
+        ensure_huggingface_login(api)
 
     logger.info(f"Fetching election files from {settings.seg_mai_base_url}")
 

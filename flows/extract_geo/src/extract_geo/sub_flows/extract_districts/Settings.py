@@ -14,8 +14,12 @@ class Settings(BaseSettings):
     district_dataset_config_name: str = "districts"
 
     # Which sinks the flow writes to at the end of its run. Defaults to
-    # both, matching this flow's original (pre-Loader) behavior exactly.
-    load_targets: list[Literal["database", "huggingface"]] = ["database", "huggingface"]
+    # json-only, so reproducing this flow never requires a database or a
+    # Hugging Face token; opt into "database"/"huggingface" explicitly.
+    load_targets: list[Literal["database", "huggingface", "json"]] = ["json"]
+
+    # Only used when "json" is in load_targets.
+    output_file: Path = Path(__file__).with_name("out") / "districts.json"
 
 
 settings = Settings()

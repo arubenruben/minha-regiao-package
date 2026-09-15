@@ -16,9 +16,9 @@ class Settings(BaseSettings):
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
 
     # Which sinks the flow writes the parsed RMUE entries to. Defaults to
-    # the database only, matching this flow's original (pre-Loader)
-    # behavior exactly; "json" is an opt-in dry-run alternative/addition.
-    load_targets: list[Literal["database", "json"]] = ["database"]
+    # json-only, so reproducing this flow never requires a database; opt
+    # into "database" explicitly.
+    load_targets: list[Literal["database", "json"]] = ["json"]
 
     # Only used when "json" is in load_targets.
     output_file: Path = Path(__file__).with_name("out") / "rmues.json"

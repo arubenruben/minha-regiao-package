@@ -32,4 +32,4 @@ def extract_text(pdf_path: Path) -> str:
     except PdfReadError as error:
         raise PdfTextExtractionError(f"{pdf_path.name} is not a readable PDF: {error}") from error
 
-    return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    return "".join(page.extract_text() or "" for page in reader.pages).strip()

@@ -14,6 +14,7 @@ from extract_geo.services.DistrictReferenceLoader import (
 )
 from minha_regiao.loader.DatabaseLoader import DatabaseLoader
 from minha_regiao.loader.HuggingFaceLoader import HuggingFaceLoader
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 from minha_regiao.utils.FuzzyMatch import resolve_name
 from extract_geo.sub_flows.extract_cities.Settings import settings
 from extract_geo.sub_flows.extract_cities.schema.CityContacts import CityContacts
@@ -198,6 +199,15 @@ def publish_city_dataset(repo_id: str, records: list[CityDatasetRecord]) -> None
     asyncio.run(loader.load(records))
 
 
+@task(name="write_city_dataset_json")
+def write_city_dataset_json(records: list[CityDatasetRecord]) -> None:
+    logger = get_run_logger()
+
+    asyncio.run(JsonFileLoader[CityDatasetRecord](settings.output_file).load(records))
+
+    logger.info(f"Wrote {len(records)} city dataset records to {settings.output_file}")
+
+
 @flow(
     name="extract_cities",
     description="Extract and index town hall and municipal assembly contacts from the ANMP website by city.",
@@ -230,10 +240,15 @@ def extract_cities(
     if "database" in settings.load_targets:
         contacts = persist_city_contacts(contacts)
 
-    if "huggingface" in settings.load_targets:
+    if "huggingface" in settings.load_targets or "json" in settings.load_targets:
         records = build_city_dataset_records(contacts)
-        ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
-        publish_city_dataset(geo_dataset_repo_id, records)
+
+        if "huggingface" in settings.load_targets:
+            ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+            publish_city_dataset(geo_dataset_repo_id, records)
+
+        if "json" in settings.load_targets:
+            write_city_dataset_json(records)
 
     return contacts
 

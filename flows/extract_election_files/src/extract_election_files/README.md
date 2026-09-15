@@ -55,7 +55,7 @@ values.
 | `GEMINI_MODEL`             | _(none)_                         |                                                        |
 | `HF_API_KEY`               | _(required)_                     |                                                        |
 | `HF_DATASET_REPO_ID`       | _(required)_                     | destination repo for raw files + structured metadata  |
-| `LOAD_TARGETS`             | `["huggingface"]`                | `huggingface`, `json`, or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
+| `LOAD_TARGETS`             | `["json"]`                       | `huggingface`, `json`, or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
 | `OUTPUT_FILE`              | `extract_election_files/out/elections.json` | used when `json` is in `LOAD_TARGETS`   |
 
 ## Running

@@ -11,6 +11,7 @@ from extract_geo.services.DatasetRepo import ensure_dataset_repo
 from extract_geo.sub_flows.extract_parishes.Settings import settings
 from minha_regiao.loader.DatabaseLoader import DatabaseLoader
 from minha_regiao.loader.HuggingFaceLoader import HuggingFaceLoader
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 from extract_geo.sub_flows.extract_parishes.schema.ParishCityLink import ParishCityLink
 from extract_geo.sub_flows.extract_parishes.schema.ParishDatasetRecord import ParishDatasetRecord
 from extract_geo.sub_flows.extract_parishes.services.CityRepository import (
@@ -154,6 +155,15 @@ def publish_parish_dataset(repo_id: str, records: list[ParishDatasetRecord]) -> 
     asyncio.run(loader.load(records))
 
 
+@task(name="write_parish_dataset_json")
+def write_parish_dataset_json(records: list[ParishDatasetRecord]) -> None:
+    logger = get_run_logger()
+
+    asyncio.run(JsonFileLoader[ParishDatasetRecord](settings.output_file).load(records))
+
+    logger.info(f"Wrote {len(records)} parish dataset records to {settings.output_file}")
+
+
 @flow(name="Enrich Freguesias PT", description="Enrich Freguesias PT")
 def enrich_freguesias_pt(
     election_results_dataset_repo_id: str = settings.election_results_dataset_repo_id,
@@ -211,7 +221,7 @@ def enrich_freguesias_pt(
             geo_settings.database_url, post_2021_links, ParishEra.POST_2021
         )
 
-    if "huggingface" in settings.load_targets:
+    if "huggingface" in settings.load_targets or "json" in settings.load_targets:
         pre_2013_records = build_parish_dataset_records.with_options(name="build_pre_2013_parish_dataset_records")(
             pre_2013_links, ParishEra.PRE_2013
         )
@@ -221,9 +231,14 @@ def enrich_freguesias_pt(
         post_2021_records = build_parish_dataset_records.with_options(name="build_post_2021_parish_dataset_records")(
             post_2021_links, ParishEra.POST_2021
         )
+        all_records = pre_2013_records + post_2013_records + post_2021_records
 
-        ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
-        publish_parish_dataset(geo_dataset_repo_id, pre_2013_records + post_2013_records + post_2021_records)
+        if "huggingface" in settings.load_targets:
+            ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+            publish_parish_dataset(geo_dataset_repo_id, all_records)
+
+        if "json" in settings.load_targets:
+            write_parish_dataset_json(all_records)
 
 
 if __name__ == "__main__":

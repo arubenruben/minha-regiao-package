@@ -34,7 +34,7 @@ Settings are pydantic-settings, loaded from `extract_rmues/.env` — copy
 |------------------|----------------------------------------------------------------------|--------------------------------------------------|
 | `RMUE_URL`        | DR municipal regulations listing page                                |                                                    |
 | `DATABASE_URL`     | `postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao`   | used when `database` is in `LOAD_TARGETS`         |
-| `LOAD_TARGETS`     | `["database"]`                                                       | `database`, `json`, or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
+| `LOAD_TARGETS`     | `["json"]`                                                            | `database`, `json`, or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
 | `OUTPUT_FILE`      | `extract_rmues/out/rmues.json`                                       | used when `json` is in `LOAD_TARGETS`             |
 
 ## Running

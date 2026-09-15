@@ -9,6 +9,7 @@ from extract_geo.services.DistrictReferenceLoader import load_district_reference
 from extract_geo.sub_flows.extract_districts.Settings import settings
 from minha_regiao.loader.DatabaseLoader import DatabaseLoader
 from minha_regiao.loader.HuggingFaceLoader import HuggingFaceLoader
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 from extract_geo.sub_flows.extract_districts.schema.DistrictDatasetRecord import (
     DistrictDatasetRecord,
 )
@@ -83,6 +84,15 @@ def publish_district_dataset(repo_id: str, records: list[DistrictDatasetRecord])
     asyncio.run(loader.load(records))
 
 
+@task(name="write_district_dataset_json")
+def write_district_dataset_json(records: list[DistrictDatasetRecord]) -> None:
+    logger = get_run_logger()
+
+    asyncio.run(JsonFileLoader[DistrictDatasetRecord](settings.output_file).load(records))
+
+    logger.info(f"Wrote {len(records)} district dataset records to {settings.output_file}")
+
+
 @flow(
     name="extract_districts",
     description="Populate the district table, assign each city to its district by INE code prefix, "
@@ -98,11 +108,16 @@ def extract_districts(geo_dataset_repo_id: str = geo_settings.geo_dataset_repo_i
     # not a "load" in the Loader sense -- it always runs.
     updated = assign(references)
 
-    if "huggingface" in settings.load_targets:
+    if "huggingface" in settings.load_targets or "json" in settings.load_targets:
         # TODO: wikipedia enrichment (fetch_wikipedia_urls) is not wired into the pipeline yet
         records = build_district_dataset_records(references, {})
-        ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
-        publish_district_dataset(geo_dataset_repo_id, records)
+
+        if "huggingface" in settings.load_targets:
+            ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+            publish_district_dataset(geo_dataset_repo_id, records)
+
+        if "json" in settings.load_targets:
+            write_district_dataset_json(records)
 
     return updated
 

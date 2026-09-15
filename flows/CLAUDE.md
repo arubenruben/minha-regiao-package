@@ -101,12 +101,15 @@ and their wiring into [`extract_pdms/src/extract_pdms/ExtractPDM.py`](extract_pd
    sink names that flow supports, e.g.:
 
    ```python
-   load_targets: list[Literal["database", "json"]] = ["database"]
+   load_targets: list[Literal["database", "json"]] = ["json"]
    ```
 
-   The default MUST reproduce whatever that flow already did before adopting
-   `Loader` — adopting this pattern must never silently change what a flow
-   persists or publishes by default.
+   **`"json"` MUST be a valid target for every flow, and MUST be the
+   default** (`load_targets` defaults to `["json"]` alone, not combined with
+   `"database"`/`"huggingface"`). This is what makes every flow reproducible
+   out of the box, with no database or external credentials required —
+   `database`/`huggingface` are opt-in additions on top of that, never the
+   default.
 
 4. **Dispatch to each configured loader as its own Prefect task**, so one
    sink failing (e.g. disk full for the JSON write) doesn't hide a DB write
@@ -130,7 +133,11 @@ and their wiring into [`extract_pdms/src/extract_pdms/ExtractPDM.py`](extract_pd
   `extract_cities` persists `CityContacts` to the database but publishes
   `CityDatasetRecord` to Hugging Face) gates each sink independently by its
   own `load_targets` membership check — it is not one shared record list fed
-  to every loader.
+  to every loader. When `"json"` and `"huggingface"` both need the same
+  derived shape (as in `extract_cities`/`extract_districts`/`extract_parishes`),
+  build that shape once behind `"huggingface" in load_targets or "json" in
+  load_targets`, then gate the publish call and the JSON write independently
+  inside that block — don't build it twice.
 - An unimplemented flow (see `parse_election_files`'s stub sub-flows) still
   gets the `load_targets` setting scaffolded on its `Settings.py` ahead of its
   parsing logic, so whoever implements it wires the output step onto
