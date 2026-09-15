@@ -213,3 +213,4 @@ pyrightconfig.json
 src/minha_regiao/flows/file_fetching/construction/cache/pdm_results.json
 src/minha_regiao/flows/file_fetching/construction/cache/pdm_results.json.tmp
 plan.md
+.github/ISSUE_TEMPLATE_DRAFT_ensure_prefect_instance.md
