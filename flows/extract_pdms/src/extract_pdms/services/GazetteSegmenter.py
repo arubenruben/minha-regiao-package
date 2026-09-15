@@ -40,29 +40,57 @@ _DOC_TYPE_HEADINGS: dict[str, str] = {
 # entity name mentioned in running prose.
 _ENTITY_HEADER_RE = re.compile(r"^\s*MUNIC[IÍ]PIO\s+D[EO]\s+\S.*$", re.IGNORECASE)
 
+# Optional annotation dre.pt sometimes prints between the heading phrase and
+# "n.º", e.g. "Aviso (extrato) n.º 15185/2018".
+_QUALIFIER_FRAGMENT = r"(?:\s*\([^)]{1,40}\))?"
+
+# Known heading phrases (see _DOC_TYPE_HEADINGS), longest first so a more
+# specific phrase (e.g. "Resolução do Conselho de Ministros") wins over a
+# shorter one that's also a valid heading on its own (e.g. "Resolução").
+_KNOWN_HEADINGS_ALTERNATION = "|".join(
+    re.escape(phrase) for phrase in sorted(set(_DOC_TYPE_HEADINGS.values()), key=len, reverse=True)
+)
+
 # Marks the start of any notice ("Aviso n.º 5420/2014", "Edital n.º
 # 328/2014", "Declaração de Retificação n.º .../...", ...), regardless of
 # doc_type -- used only to find where the *next* notice begins (i.e. where
 # the target notice's own text ends), not to identify the target itself.
 # The short, non-greedy label deliberately caps how much of the line can
 # precede "n.º NNNN/YYYY", so this can't accidentally swallow a full
-# sentence that happens to end in a similarly-shaped reference.
-_NOTICE_HEADER_RE = re.compile(r"^\s*[^\n]{1,60}?\s+n\.?\s*[ºo]\s*\d+\s*/\s*\d{4}\s*\.?\s*$")
+# sentence that happens to end in a similarly-shaped reference. That
+# generic form requires a modern 4-digit year, since a looser 2-digit year
+# on an arbitrary label spuriously matches inline legal citations that
+# happen to end a wrapped line (e.g. "..., no Decreto-Lei n.º 46/94"). Old
+# (pre-2000) gazette pages print 2-digit years even in real notice headers
+# (e.g. "Resolução do Conselho de Ministros n.º 180/97"), so those are only
+# recognised when anchored to one of the known heading phrases, which is
+# specific enough to not false-positive the same way.
+_NOTICE_HEADER_RE = re.compile(
+    r"^\s*(?:"
+    r"[^\n]{1,60}?\s+n\.?\s*[ºo]\s*\d+\s*/\s*\d{4}"
+    r"|"
+    rf"(?:{_KNOWN_HEADINGS_ALTERNATION}){_QUALIFIER_FRAGMENT}\s+n\.?\s*[ºo]\s*\d+\s*/\s*\d{{2,4}}"
+    r")(?:\s*/\s*\d+)?\s*\.?\s*$",
+    re.IGNORECASE,
+)
 
 
-def _target_header_pattern(heading_phrase: str, number: str, year: int) -> re.Pattern[str]:
+def _target_header_pattern(heading_phrase: str, number: str, year: int, suffix: int | None) -> re.Pattern[str]:
+    two_digit_year = f"{year % 100:02d}"
+    suffix_fragment = rf"\s*/\s*{suffix}" if suffix is not None else ""
     return re.compile(
-        rf"^\s*{re.escape(heading_phrase)}\s+n\.?\s*[ºo]\s*{re.escape(number)}\s*/\s*{year}\s*\.?\s*$",
+        rf"^\s*{re.escape(heading_phrase)}{_QUALIFIER_FRAGMENT}\s+n\.?\s*[ºo]\s*{re.escape(number)}"
+        rf"\s*/\s*(?:{year}|{two_digit_year}){suffix_fragment}\s*\.?\s*$",
         re.IGNORECASE,
     )
 
 
-def find_notice_text(text: str, doc_type: str, number: str, year: int) -> str:
+def find_notice_text(text: str, doc_type: str, number: str, year: int, suffix: int | None = None) -> str:
     """Returns the slice of `text` -- from its own "<heading> n.º
     <number>/<year>" header line up to (but not including) whichever comes
     first of the next entity header or the next notice header, or the end
     of `text` if neither occurs again -- that belongs to the notice
-    identified by `doc_type`/`number`/`year`.
+    identified by `doc_type`/`number`/`year`/`suffix`.
 
     Raises GazetteNoticeNotFoundError, rather than falling back to the full
     text, when `doc_type` has no known heading mapping or when no line in
@@ -77,19 +105,36 @@ def find_notice_text(text: str, doc_type: str, number: str, year: int) -> str:
         )
 
     lines = text.splitlines()
-    target_pattern = _target_header_pattern(heading_phrase, number, year)
+    target_pattern = _target_header_pattern(heading_phrase, number, year, suffix)
 
-    start = next((index for index, line in enumerate(lines) if target_pattern.match(line.strip())), None)
-    if start is None:
+    # A multi-page notice's own heading is often reprinted verbatim as a
+    # running page header (seen on e.g. "Declaração n.º 55/2024/2", a
+    # 2-page notice whose heading appears a first time atop page 1's
+    # running header, again as the notice's real heading right after its
+    # "MUNICÍPIO DE ..." entity line, and a third time atop page 2). Prefer
+    # whichever match is immediately preceded by an entity header -- that's
+    # the real section start -- and only fall back to the first match when
+    # none is (e.g. national-level notices like a Resolução do Conselho de
+    # Ministros, which aren't published under a "MUNICÍPIO DE ..." entity).
+    start_candidates = [index for index, line in enumerate(lines) if target_pattern.match(line.strip())]
+    if not start_candidates:
         raise GazetteNoticeNotFoundError(
             f"Could not find a {heading_phrase!r} n.º {number}/{year} header in the extracted text"
         )
+    start = next(
+        (index for index in start_candidates if index > 0 and _ENTITY_HEADER_RE.match(lines[index - 1].strip())),
+        start_candidates[0],
+    )
 
+    # Excludes lines that are just a repeat of the target's own header --
+    # e.g. that same running-header reprint on page 2 -- from ending the
+    # slice early; only a genuinely different entity/notice header does.
     end = next(
         (
             index
             for index in range(start + 1, len(lines))
-            if _ENTITY_HEADER_RE.match(lines[index].strip()) or _NOTICE_HEADER_RE.match(lines[index].strip())
+            if not target_pattern.match(lines[index].strip())
+            and (_ENTITY_HEADER_RE.match(lines[index].strip()) or _NOTICE_HEADER_RE.match(lines[index].strip()))
         ),
         len(lines),
     )

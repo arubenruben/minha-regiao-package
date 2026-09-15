@@ -2,7 +2,7 @@ from enum import Enum
 
 from pydantic import BaseModel, HttpUrl
 
-from extract_pdms.schema.RegulationStructure import ArticleSection
+from extract_pdms.schema.RegulationStructure import StructureNode
 
 
 class DocumentStatus(str, Enum):
@@ -49,9 +49,10 @@ class RegulationDocument(BaseModel):
     # extract_pdms.services.GazetteSegmenter.find_notice_text, to just this
     # document's own notice within that (possibly multi-municipality) page
     # range. `structure` is that same narrowed text broken down into its
-    # Parte/Título/Capítulo/Secção/Subsecção/Artigo hierarchy (see
-    # extract_pdms.services.StructureParser); it's additive, `text` remains
-    # the authoritative full text of this notice.
+    # nested Parte/Título/Capítulo/Secção/Subsecção/Artigo hierarchy (see
+    # extract_pdms.services.StructureParser and
+    # extract_pdms.schema.RegulationStructure); it's additive, `text`
+    # remains the authoritative full text of this notice.
     status: DocumentStatus = DocumentStatus.PENDING
     text: str | None = None
-    structure: list[ArticleSection] | None = None
+    structure: list[StructureNode] | None = None

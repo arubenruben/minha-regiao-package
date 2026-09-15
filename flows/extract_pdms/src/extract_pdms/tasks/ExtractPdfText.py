@@ -81,7 +81,7 @@ async def extract_pdf_text_task(
         return document.model_copy(update={"status": DocumentStatus.NEEDS_OCR, "text": None})
 
     try:
-        notice_text = find_notice_text(text, document.doc_type, document.number, document.year)
+        notice_text = find_notice_text(text, document.doc_type, document.number, document.year, document.suffix)
     except GazetteNoticeNotFoundError as error:
         logger.error(
             f"{error} ({url}, {document.doc_type} {document.number}/{document.year}) -- "

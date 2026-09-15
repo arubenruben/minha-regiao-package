@@ -1,6 +1,14 @@
 import re
 
-from extract_pdms.schema.RegulationStructure import ArticleSection
+from extract_pdms.schema.RegulationStructure import (
+    Article,
+    Chapter,
+    Part,
+    Section,
+    StructureNode,
+    Subsection,
+    Title,
+)
 
 _ROMAN = r"[IVXLCDM]+"
 
@@ -49,6 +57,42 @@ _HEADER_MATCHERS = (
 
 _MAX_HEADING_LENGTH = 150
 
+# Nesting depth, shallowest to deepest. Unlike _HEADER_MATCHERS above (whose
+# order is just match-checking order, see its own comment), order here is
+# significant: it's the order these levels actually nest in a Diário da
+# República regulation, and it drives how deep a new header pops the
+# currently open container stack (see parse_structure).
+_LEVELS = ("parte", "titulo", "capitulo", "seccao", "subseccao")
+
+_LEVEL_CLASS: dict[str, type] = {
+    "parte": Part,
+    "titulo": Title,
+    "capitulo": Chapter,
+    "seccao": Section,
+    "subseccao": Subsection,
+}
+
+# Field each level's container class holds its immediate child containers
+# (the next level down) under. Subsecção has none -- it's the deepest
+# container level, holding only Artigos (via the `articles` field every
+# level shares).
+_CHILD_FIELD: dict[str, str] = {
+    "parte": "titles",
+    "titulo": "chapters",
+    "capitulo": "sections",
+    "seccao": "subsections",
+}
+
+# Levels nested at or below each key, cleared whenever that key's level is
+# (re-)entered.
+_RESET_BELOW: dict[str, tuple[str, ...]] = {
+    "parte": ("titulo", "capitulo", "seccao", "subseccao"),
+    "titulo": ("capitulo", "seccao", "subseccao"),
+    "capitulo": ("seccao", "subseccao"),
+    "seccao": ("subseccao",),
+    "subseccao": (),
+}
+
 
 def _is_header_line(line: str) -> bool:
     return any(pattern.match(line) for _, pattern in _HEADER_MATCHERS)
@@ -78,45 +122,37 @@ def _consume_heading(lines: list[str], index: int) -> tuple[int, str | None]:
     return index + 1, candidate
 
 
-def parse_structure(text: str) -> list[ArticleSection]:
-    """Splits a regulation's raw extracted text into one `ArticleSection`
-    per Artigo, carrying whichever Parte/Título/Capítulo/Secção/Subsecção
-    heading was most recently opened above it.
+def parse_structure(text: str) -> list[StructureNode]:
+    """Splits a regulation's raw extracted text into a nested Parte > Título
+    > Capítulo > Secção > Subsecção > Artigo tree.
 
     Any text before the first recognised header (announcement/deliberação
     preamble, masthead noise, ...) is dropped -- it isn't part of any
     Artigo, and the document's full raw text is already preserved separately
-    (see RegulationDocument.text). Likewise, entering a header level resets
-    every level nested *below* it (a new CAPÍTULO clears the current
-    Secção/Subsecção, a new TÍTULO also clears the current Capítulo, ...),
-    but never the levels *above* it.
+    (see RegulationDocument.text). Levels a given regulation doesn't use are
+    simply absent from the tree; the returned list's items are whichever
+    level(s) the regulation actually opens at (see StructureNode).
+
+    Entering a header level resets every level nested *below* it (a new
+    CAPÍTULO clears the current Secção/Subsecção, a new TÍTULO also clears
+    the current Capítulo, ...), but never the levels *above* it -- modelled
+    here as popping the open-container stack down to (and including) the
+    re-entered level before attaching the new node.
     """
     lines = text.splitlines()
 
-    heading_state: dict[str, str | None] = {
-        "parte": None,
-        "parte_heading": None,
-        "titulo": None,
-        "titulo_heading": None,
-        "capitulo": None,
-        "capitulo_heading": None,
-        "seccao": None,
-        "seccao_heading": None,
-        "subseccao": None,
-        "subseccao_heading": None,
-    }
+    heading_state: dict[str, str | None] = {level: None for level in _LEVELS}
 
-    # Levels nested at or below each key, cleared whenever that key's level
-    # is (re-)entered.
-    _RESET_BELOW: dict[str, tuple[str, ...]] = {
-        "parte": ("titulo", "capitulo", "subseccao", "seccao"),
-        "titulo": ("capitulo", "subseccao", "seccao"),
-        "capitulo": ("subseccao", "seccao"),
-        "seccao": ("subseccao",),
-        "subseccao": (),
-    }
+    roots: list[StructureNode] = []
+    # Currently open containers, outermost first, each holding the level
+    # name alongside the node itself (the level name is what's needed to
+    # look up which of the node's own fields new children attach under).
+    stack: list[tuple[str, StructureNode]] = []
 
-    sections: list[ArticleSection] = []
+    def attach_article(article: Article) -> None:
+        parent = stack[-1][1] if stack else None
+        parent.articles.append(article) if parent is not None else roots.append(article)  # type: ignore[union-attr]
+
     current: dict[str, object] | None = None
 
     def flush() -> None:
@@ -125,20 +161,10 @@ def parse_structure(text: str) -> list[ArticleSection]:
             return
         body = "\n".join(current["body"]).strip()  # type: ignore[arg-type]
         if body or current["artigo_heading"]:
-            sections.append(
-                ArticleSection(
-                    parte=heading_state["parte"],
-                    parte_heading=heading_state["parte_heading"],
-                    titulo=heading_state["titulo"],
-                    titulo_heading=heading_state["titulo_heading"],
-                    capitulo=heading_state["capitulo"],
-                    capitulo_heading=heading_state["capitulo_heading"],
-                    seccao=heading_state["seccao"],
-                    seccao_heading=heading_state["seccao_heading"],
-                    subseccao=heading_state["subseccao"],
-                    subseccao_heading=heading_state["subseccao_heading"],
-                    artigo=current["artigo"],  # type: ignore[arg-type]
-                    artigo_heading=current["artigo_heading"],  # type: ignore[arg-type]
+            attach_article(
+                Article(
+                    number=current["artigo"],  # type: ignore[arg-type]
+                    heading=current["artigo_heading"],  # type: ignore[arg-type]
                     text=body,
                 )
             )
@@ -190,11 +216,23 @@ def parse_structure(text: str) -> list[ArticleSection]:
             flush()
             for cleared in _RESET_BELOW[matched_level]:
                 heading_state[cleared] = None
-                heading_state[f"{cleared}_heading"] = None
             heading_state[matched_level] = value
+
+            depth = _LEVELS.index(matched_level)
+            while stack and _LEVELS.index(stack[-1][0]) >= depth:
+                stack.pop()
+
+            node = _LEVEL_CLASS[matched_level](number=value)
+            parent_level, parent_node = stack[-1] if stack else (None, None)
+            if parent_node is not None:
+                getattr(parent_node, _CHILD_FIELD[parent_level]).append(node)  # type: ignore[index]
+            else:
+                roots.append(node)
+            stack.append((matched_level, node))
+
             index += 1
             index, heading = _consume_heading(lines, index)
-            heading_state[f"{matched_level}_heading"] = heading
+            node.heading = heading  # type: ignore[union-attr]
             continue
 
         if current is not None:
@@ -202,4 +240,4 @@ def parse_structure(text: str) -> list[ArticleSection]:
         index += 1
 
     flush()
-    return sections
+    return roots

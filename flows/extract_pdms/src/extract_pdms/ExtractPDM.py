@@ -99,6 +99,7 @@ async def extract_pdms() -> list[PDMRecord]:
 
     if "database" in settings.load_targets:
         await persist_pdms_task(pdm_records)
+    
     if "json" in settings.load_targets:
         await write_pdms_json_task(pdm_records)
 
