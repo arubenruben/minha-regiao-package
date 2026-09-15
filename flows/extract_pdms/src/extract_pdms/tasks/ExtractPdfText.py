@@ -3,10 +3,13 @@ from pathlib import Path
 import httpx
 from prefect import get_run_logger, task
 
+from extract_pdms.exception.GazetteNoticeNotFoundError import GazetteNoticeNotFoundError
 from extract_pdms.exception.PdfDownloadError import PdfDownloadError
 from extract_pdms.exception.PdfTextExtractionError import PdfTextExtractionError
 from extract_pdms.schema.RegulationDocument import DocumentStatus, RegulationDocument
+from extract_pdms.services.GazetteSegmenter import find_notice_text
 from extract_pdms.services.PdfTextExtractor import download_pdf, extract_text
+from extract_pdms.services.StructureParser import parse_structure
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
 # (see extract_pdms.ExtractPDM).
@@ -19,13 +22,29 @@ async def extract_pdf_text_task(
 ) -> RegulationDocument:
     """Downloads `document`'s PDF into `tmp_dir` and extracts its text,
     returning an updated copy with `status` set to record the outcome --
-    `text` is left null whenever `status` isn't OK, since there's nothing
-    to report for a file that couldn't be read.
+    `text` and `structure` are left null whenever `status` isn't OK, since
+    there's nothing reliable to report for a file that couldn't be read or
+    couldn't be narrowed to this document's own notice.
+
+    The downloaded PDF is a raw Diário da República page range, not a file
+    scoped to this one regulation -- it can bundle unrelated notices from
+    other municipalities/entities published on the same page(s) (see
+    extract_pdms.services.GazetteSegmenter). So the page's full extracted
+    text is immediately narrowed, via `find_notice_text`, to just the
+    notice matching `document`'s own doc_type/number/year; `text` is that
+    narrowed notice, not the whole page. `structure` is that same narrowed
+    text broken down into its Parte/Título/Capítulo/Secção/Subsecção/Artigo
+    hierarchy (see extract_pdms.services.StructureParser).
 
     A PDF that downloads and parses fine but yields no text at all is an
     old, scanned regulation that needs OCR -- until OCR support exists,
     that's recorded as NEEDS_OCR rather than attempted. A download or parse
     failure is recorded as DOWNLOAD_FAILED / EXTRACTION_FAILED respectively.
+    Failure to locate this document's own notice inside the page (an
+    unmapped doc_type, or no matching header line -- the matching mechanism
+    is heuristic, not proven exhaustive) is recorded as NOTICE_NOT_FOUND
+    rather than silently falling back to the whole, possibly-unrelated,
+    page text.
 
     Opens its own httpx.AsyncClient rather than taking a shared one: when
     this task is fanned out via `.map()`, Prefect's default task runner
@@ -61,4 +80,14 @@ async def extract_pdf_text_task(
         )
         return document.model_copy(update={"status": DocumentStatus.NEEDS_OCR, "text": None})
 
-    return document.model_copy(update={"status": DocumentStatus.OK, "text": text})
+    try:
+        notice_text = find_notice_text(text, document.doc_type, document.number, document.year)
+    except GazetteNoticeNotFoundError as error:
+        logger.error(
+            f"{error} ({url}, {document.doc_type} {document.number}/{document.year}) -- "
+            "matching mechanism needs to be extended for this document"
+        )
+        return document.model_copy(update={"status": DocumentStatus.NOTICE_NOT_FOUND, "text": None})
+
+    structure = parse_structure(notice_text)
+    return document.model_copy(update={"status": DocumentStatus.OK, "text": notice_text, "structure": structure})
