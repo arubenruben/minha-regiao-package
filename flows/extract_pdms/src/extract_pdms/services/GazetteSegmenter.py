@@ -37,8 +37,18 @@ _DOC_TYPE_HEADINGS: dict[str, str] = {
 # GAVIÃO"). Required to be the only content on its line, same anchoring
 # rationale as extract_pdms.services.StructureParser's headers: it's how
 # these are actually typeset, and it's what keeps this from matching an
-# entity name mentioned in running prose.
-_ENTITY_HEADER_RE = re.compile(r"^\s*MUNIC[IÍ]PIO\s+D[EO]\s+\S.*$", re.IGNORECASE)
+# entity name mentioned in running prose -- e.g. a notice's own body text
+# referring back to "o município de Aguiar da Beira estabelece...", which,
+# once the PDF's line-wrapping happens to land "município de Aguiar da
+# Beira estabelece..." at the start of a line, is otherwise
+# indistinguishable from a real "MUNICÍPIO DE AGUIAR DA BEIRA" header by
+# leading text alone. What actually distinguishes the two is that the real
+# header is typeset entirely in upper case and contains nothing else, while
+# running prose is not -- so, unlike a bare `\S.*$` tail (which imposes no
+# such constraint and was matching straight through into lower-case prose),
+# this requires case-sensitive "MUNICÍPIO"/"MUNICIPIO" and forbids any
+# lower-case letter (plain or accented) anywhere in the rest of the line.
+_ENTITY_HEADER_RE = re.compile(r"^\s*MUNIC[IÍ]PIO\s+D[EO]\s+[^a-zà-ÿ\n]+$")
 
 # Optional annotation dre.pt sometimes prints between the heading phrase and
 # "n.º", e.g. "Aviso (extrato) n.º 15185/2018".

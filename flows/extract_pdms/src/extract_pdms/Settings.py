@@ -21,9 +21,13 @@ class Settings(BaseSettings):
     # SNIT's portal occasionally serves a broken/anti-bot response (e.g. an
     # error page with no CSRF token) under load -- transient, so the search
     # and regulamento-lookup tasks retry rather than treating it as "this
-    # municipality has no PDM".
+    # municipality has no PDM". Delay is exponential (attempt N waits
+    # snit_retry_delay_seconds * 2**(N-1)) with jitter, rather than a flat
+    # delay, so repeated retries space out instead of hammering the portal
+    # again right as it's rate-limiting/anti-bot-blocking.
     snit_task_retries: int = 3
     snit_retry_delay_seconds: float = 5.0
+    snit_retry_jitter_factor: float = 1.0
 
     # How many regulation PDFs can be downloaded/parsed concurrently.
     pdf_download_concurrency: int = 8

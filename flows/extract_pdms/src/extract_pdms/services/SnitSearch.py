@@ -48,7 +48,11 @@ def load_municipalities() -> list[str]:
 # fetch() against an actually-loaded portal page (via page_action) instead.
 SEARCH_SCRIPT = """
 async ({ catalogue, path, municipio }) => {
-    const token = document.getElementById('__wc_csrfToken').value;
+    const tokenEl = document.getElementById('__wc_csrfToken');
+    if (!tokenEl) {
+        throw new Error('__wc_csrfToken element not found -- portal likely served an anti-bot/rate-limit page');
+    }
+    const token = tokenEl.value;
     const params = new URLSearchParams({
         catalogue,
         profile: 'CSW',
@@ -81,7 +85,11 @@ async ({ catalogue, path, municipio }) => {
 # amendments, ...) as lDinRegValues[].PDF.
 REGULAMENTO_SCRIPT = """
 async ({ path, idMetadata }) => {
-    const token = document.getElementById('__wc_csrfToken').value;
+    const tokenEl = document.getElementById('__wc_csrfToken');
+    if (!tokenEl) {
+        throw new Error('__wc_csrfToken element not found -- portal likely served an anti-bot/rate-limit page');
+    }
+    const token = tokenEl.value;
     const params = new URLSearchParams({
         action: 'getDinamicaAndRegulamento',
         sType: 'Reg',
