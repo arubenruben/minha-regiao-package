@@ -5,13 +5,8 @@ import httpx
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-
-class PdfDownloadError(Exception):
-    """Raised when a regulation PDF can't be downloaded."""
-
-
-class PdfTextExtractionError(Exception):
-    """Raised when a downloaded file can't be parsed as a PDF at all."""
+from extract_pdms.exception.PdfDownloadError import PdfDownloadError
+from extract_pdms.exception.PdfTextExtractionError import PdfTextExtractionError
 
 
 async def download_pdf(client: httpx.AsyncClient, url: str, dest_dir: Path, timeout_seconds: float) -> Path:

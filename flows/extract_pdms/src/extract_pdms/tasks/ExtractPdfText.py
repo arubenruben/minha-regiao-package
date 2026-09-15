@@ -3,13 +3,10 @@ from pathlib import Path
 import httpx
 from prefect import get_run_logger, task
 
+from extract_pdms.exception.PdfDownloadError import PdfDownloadError
+from extract_pdms.exception.PdfTextExtractionError import PdfTextExtractionError
 from extract_pdms.schema.RegulationDocument import DocumentStatus, RegulationDocument
-from extract_pdms.services.PdfTextExtractor import (
-    PdfDownloadError,
-    PdfTextExtractionError,
-    download_pdf,
-    extract_text,
-)
+from extract_pdms.services.PdfTextExtractor import download_pdf, extract_text
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
 # (see extract_pdms.ExtractPDM).

@@ -7,6 +7,8 @@ from prefect import get_run_logger
 from scrapling.fetchers import AsyncStealthySession
 
 import extract_pdms
+from extract_pdms.exception.PdfUrlParseError import PdfUrlParseError
+from extract_pdms.exception.SnitPageActionError import SnitPageActionError
 
 SNIT_PORTAL_URL = "https://snit-mais.dgterritorio.gov.pt/portalsnit/"
 SNIT_SEARCH_PATH = "/portalsnit/AdvancedMetadataSearch.WebClient.ashx"
@@ -28,19 +30,6 @@ MUNICIPALITIES_FILE = (
 PDF_FILENAME_PATTERN = re.compile(
     r"^(?P<doc_type>[A-Z]+(?: [A-Z]+)*) (?P<number>\d+)_(?P<year>\d{4})(?:_(?P<suffix>\d+))?$"
 )
-
-
-class PdfUrlParseError(ValueError):
-    """Raised when a SNIT regulation PDF URL doesn't match the expected dre.pt-style filename convention."""
-
-
-class SnitPageActionError(RuntimeError):
-    """Raised when the portal page doesn't produce a result for our
-    page_action -- e.g. scrapling itself logs a page_action failure (seen in
-    practice as the portal serving an error page with no __wc_csrfToken
-    element, most likely anti-bot/rate-limiting) and swallows it, leaving
-    the page in an unusable state instead of propagating the failure.
-    """
 
 
 def load_municipalities() -> list[str]:
