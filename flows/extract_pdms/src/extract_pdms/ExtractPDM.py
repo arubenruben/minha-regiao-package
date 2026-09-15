@@ -27,10 +27,14 @@ from extract_pdms.tasks.SearchMunicipio import SEARCH_MUNICIPIO_TAG
 async def persist_pdms_task(records: list[PDMRecord]) -> None:
     logger = get_run_logger()
 
-    loader = DatabaseLoader[PDMRecord](lambda batch: persist_pdms(settings.database_url, batch))
+    loader = DatabaseLoader[PDMRecord](
+        lambda batch: persist_pdms(settings.database_url, batch)
+    )
     await loader.load(records)
 
-    logger.info(f"Persisted PDM records for {len(records)} municipalities to the database")
+    logger.info(
+        f"Persisted PDM records for {len(records)} municipalities to the database"
+    )
 
 
 @task(name="write_pdms_json")
@@ -77,8 +81,12 @@ async def extract_pdms() -> list[PDMRecord]:
 
     await ensure_concurrency_limit(PROCESS_MUNICIPIO_TAG, settings.snit_concurrency)
     await ensure_concurrency_limit(SEARCH_MUNICIPIO_TAG, settings.snit_concurrency)
-    await ensure_concurrency_limit(FETCH_REGULATION_DOCUMENTS_TAG, settings.snit_concurrency)
-    await ensure_concurrency_limit(EXTRACT_PDF_TEXT_TAG, settings.pdf_download_concurrency)
+    await ensure_concurrency_limit(
+        FETCH_REGULATION_DOCUMENTS_TAG, settings.snit_concurrency
+    )
+    await ensure_concurrency_limit(
+        EXTRACT_PDF_TEXT_TAG, settings.pdf_download_concurrency
+    )
 
     with tempfile.TemporaryDirectory(prefix="extract_pdms_") as tmp_dir_name:
         tmp_dir = Path(tmp_dir_name)
@@ -90,7 +98,9 @@ async def extract_pdms() -> list[PDMRecord]:
             unmapped(output_store),
         )
 
-        with tqdm(total=len(municipalities), desc="Processing municipalities", unit="city") as progress:
+        with tqdm(
+            total=len(municipalities), desc="Processing municipalities", unit="city"
+        ) as progress:
             for future in futures:
                 cast("None", future.result())
                 progress.update(1)
@@ -99,7 +109,7 @@ async def extract_pdms() -> list[PDMRecord]:
 
     if "database" in settings.load_targets:
         await persist_pdms_task(pdm_records)
-    
+
     if "json" in settings.load_targets:
         await write_pdms_json_task(pdm_records)
 

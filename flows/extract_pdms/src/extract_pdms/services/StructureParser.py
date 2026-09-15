@@ -222,6 +222,22 @@ def parse_structure(text: str) -> list[StructureNode]:
             while stack and _LEVELS.index(stack[-1][0]) >= depth:
                 stack.pop()
 
+            # `matched_level` can still be more than one level below
+            # whatever's left open on the stack -- e.g. a SUBSECÇÃO
+            # directly under a CAPÍTULO, with no SECÇÃO in between.
+            # Synthesize an empty container for each skipped intermediate
+            # level (number="" marks it as not itself drawn from a header
+            # line) so the new node always lands in a field typed for its
+            # own level, never a shallower one -- attaching it directly to
+            # the open CAPÍTULO above would silently put e.g. a Subsection
+            # into a `sections: list[Section]` field.
+            while stack and _LEVELS.index(stack[-1][0]) + 1 < depth:
+                skip_parent_level, skip_parent_node = stack[-1]
+                skipped_level = _LEVELS[_LEVELS.index(skip_parent_level) + 1]
+                placeholder = _LEVEL_CLASS[skipped_level](number="")
+                getattr(skip_parent_node, _CHILD_FIELD[skip_parent_level]).append(placeholder)  # type: ignore[index]
+                stack.append((skipped_level, placeholder))
+
             node = _LEVEL_CLASS[matched_level](number=value)
             parent_level, parent_node = stack[-1] if stack else (None, None)
             if parent_node is not None:

@@ -61,6 +61,19 @@ _KNOWN_HEADINGS_ALTERNATION = "|".join(
     re.escape(phrase) for phrase in sorted(set(_DOC_TYPE_HEADINGS.values()), key=len, reverse=True)
 )
 
+# A modern notice's header stands alone on its own line, with the body
+# starting on the next one -- hence anchoring a header match with `$`. Old
+# (pre-2000s) gazette pages instead run the heading, "n.º NNNN/YYYY", an
+# optional trailing "(N.ª série)" qualifier, and the notice's own body text
+# together as one continuous paragraph, e.g. "Declaração n.º 4/2004 (2.ª
+# série).— Torna-se público que..." (DECL 4/2004,
+# https://snit-mais.dgterritorio.gov.pt/SNIT/Diplomas/DECL%204_2004.pdf).
+# There, what marks the header's end isn't end-of-line but the ".—"
+# (period + em/en dash) that opens the body -- so a header match ends in
+# either an end-of-line (modern) or that trailing qualifier followed by
+# ".—" (old), never just an open-ended "anything can follow".
+_HEADER_TERMINATOR = rf"(?:{_QUALIFIER_FRAGMENT}\s*\.\s*[—–]|\s*\.?\s*$)"
+
 # Marks the start of any notice ("Aviso n.º 5420/2014", "Edital n.º
 # 328/2014", "Declaração de Retificação n.º .../...", ...), regardless of
 # doc_type -- used only to find where the *next* notice begins (i.e. where
@@ -70,7 +83,10 @@ _KNOWN_HEADINGS_ALTERNATION = "|".join(
 # sentence that happens to end in a similarly-shaped reference. That
 # generic form requires a modern 4-digit year, since a looser 2-digit year
 # on an arbitrary label spuriously matches inline legal citations that
-# happen to end a wrapped line (e.g. "..., no Decreto-Lei n.º 46/94"). Old
+# happen to end a wrapped line (e.g. "..., no Decreto-Lei n.º 46/94") --
+# _HEADER_TERMINATOR is what keeps this safe even for the old run-on style,
+# since a real citation continues past the year with more of its own
+# sentence (", de 22 de Setembro"), never a bare period-dash. Old
 # (pre-2000) gazette pages print 2-digit years even in real notice headers
 # (e.g. "Resolução do Conselho de Ministros n.º 180/97"), so those are only
 # recognised when anchored to one of the known heading phrases, which is
@@ -80,7 +96,7 @@ _NOTICE_HEADER_RE = re.compile(
     r"[^\n]{1,60}?\s+n\.?\s*[ºo]\s*\d+\s*/\s*\d{4}"
     r"|"
     rf"(?:{_KNOWN_HEADINGS_ALTERNATION}){_QUALIFIER_FRAGMENT}\s+n\.?\s*[ºo]\s*\d+\s*/\s*\d{{2,4}}"
-    r")(?:\s*/\s*\d+)?\s*\.?\s*$",
+    rf")(?:\s*/\s*\d+)?{_HEADER_TERMINATOR}",
     re.IGNORECASE,
 )
 
@@ -90,7 +106,7 @@ def _target_header_pattern(heading_phrase: str, number: str, year: int, suffix: 
     suffix_fragment = rf"\s*/\s*{suffix}" if suffix is not None else ""
     return re.compile(
         rf"^\s*{re.escape(heading_phrase)}{_QUALIFIER_FRAGMENT}\s+n\.?\s*[ºo]\s*{re.escape(number)}"
-        rf"\s*/\s*(?:{year}|{two_digit_year}){suffix_fragment}\s*\.?\s*$",
+        rf"\s*/\s*(?:{year}|{two_digit_year}){suffix_fragment}{_HEADER_TERMINATOR}",
         re.IGNORECASE,
     )
 
