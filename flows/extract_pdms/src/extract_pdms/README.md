@@ -12,7 +12,6 @@ extract_pdms/
   schema/                       PDMRecord, RegulationDocument, ExtractionState
   services/
     SnitSearch.py                searches SNIT for a municipality's PDM
-    StructureParser.py            parses a notice's text into its legal structure
     OutputStore.py                atomic, resumable per-document JSON cache
     PDMRepository.py              persists PDMRecord -> the PDM table
     ConcurrencyLimiter.py         registers the flow's tag-based concurrency limit
@@ -21,10 +20,12 @@ extract_pdms/
   out/state.json                OutputStore's resumable checkpoint (separate from pdms.json)
 ```
 
-Downloading/parsing a regulation PDF and narrowing it down to its own notice
-(a raw DR page range bundles unrelated notices from other
-municipalities/entities) is shared, not extract_pdms-specific -- see
-`minha_regiao.gazette` (`PdfTextExtractor.py`, `GazetteSegmenter.py`, and
+Downloading/parsing a regulation PDF, narrowing it down to its own notice (a
+raw DR page range bundles unrelated notices from other
+municipalities/entities), and parsing that notice's legal
+Parte/Título/Capítulo/Secção/Subsecção/Artigo structure is shared, not
+extract_pdms-specific -- see `minha_regiao.gazette` (`PdfTextExtractor.py`,
+`GazetteSegmenter.py`, `StructureParser.py`, `RegulationStructure.py`, and
 their exceptions), also used by `extract_rmues`.
 
 ## Prerequisites

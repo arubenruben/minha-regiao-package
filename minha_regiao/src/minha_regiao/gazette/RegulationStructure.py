@@ -7,7 +7,7 @@ class Article(BaseModel):
     """One Artigo parsed out of a regulation's extracted text.
 
     Always a leaf: an Artigo never contains further nesting, only its own
-    text. See extract_pdms.services.StructureParser.parse_structure for how
+    text. See minha_regiao.gazette.StructureParser.parse_structure for how
     this is derived from a document's raw extracted text.
     """
 

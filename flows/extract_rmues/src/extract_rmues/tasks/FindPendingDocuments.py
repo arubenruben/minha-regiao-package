@@ -10,7 +10,12 @@ def _pending_documents_from_entries(
     entries: list[RMUERegulation],
 ) -> list[PendingDocument]:
     return [
-        PendingDocument(table=table, name=document.name, dre_url=document.dre_url)
+        PendingDocument(
+            table=table,
+            municipality=entry.municipality,
+            name=document.name,
+            dre_url=document.dre_url,
+        )
         for entry in entries
         for table, documents in (
             ("rmue", entry.urbanization_documents),

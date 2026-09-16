@@ -2,7 +2,7 @@ from enum import Enum
 
 from pydantic import BaseModel, HttpUrl
 
-from extract_pdms.schema.RegulationStructure import StructureNode
+from minha_regiao.gazette.RegulationStructure import StructureNode
 
 
 class DocumentStatus(str, Enum):
@@ -50,9 +50,9 @@ class RegulationDocument(BaseModel):
     # document's own notice within that (possibly multi-municipality) page
     # range. `structure` is that same narrowed text broken down into its
     # nested Parte/Título/Capítulo/Secção/Subsecção/Artigo hierarchy (see
-    # extract_pdms.services.StructureParser and
-    # extract_pdms.schema.RegulationStructure); it's additive, `text`
-    # remains the authoritative full text of this notice.
+    # minha_regiao.gazette.StructureParser and
+    # minha_regiao.gazette.RegulationStructure -- shared with extract_rmues);
+    # it's additive, `text` remains the authoritative full text of this notice.
     status: DocumentStatus = DocumentStatus.PENDING
     text: str | None = None
     structure: list[StructureNode] | None = None

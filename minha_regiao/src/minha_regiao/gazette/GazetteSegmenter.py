@@ -39,7 +39,7 @@ _DOC_TYPE_HEADINGS: dict[str, str] = {
 
 # Marks the start of a new publishing entity's section (e.g. "MUNICÍPIO DE
 # GAVIÃO"). Required to be the only content on its line, same anchoring
-# rationale as extract_pdms.services.StructureParser's headers: it's how
+# rationale as minha_regiao.gazette.StructureParser's headers: it's how
 # these are actually typeset, and it's what keeps this from matching an
 # entity name mentioned in running prose -- e.g. a notice's own body text
 # referring back to "o município de Aguiar da Beira estabelece...", which,

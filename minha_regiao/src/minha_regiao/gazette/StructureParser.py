@@ -1,6 +1,6 @@
 import re
 
-from extract_pdms.schema.RegulationStructure import (
+from minha_regiao.gazette.RegulationStructure import (
     Article,
     Chapter,
     Part,

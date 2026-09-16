@@ -4,12 +4,12 @@ import httpx
 from prefect import get_run_logger, task
 
 from extract_pdms.schema.RegulationDocument import DocumentStatus, RegulationDocument
-from extract_pdms.services.StructureParser import parse_structure
 from minha_regiao.gazette.exception.GazetteNoticeNotFoundError import GazetteNoticeNotFoundError
 from minha_regiao.gazette.exception.PdfDownloadError import PdfDownloadError
 from minha_regiao.gazette.exception.PdfTextExtractionError import PdfTextExtractionError
 from minha_regiao.gazette.GazetteSegmenter import find_notice_text
 from minha_regiao.gazette.PdfTextExtractor import download_pdf, extract_text
+from minha_regiao.gazette.StructureParser import parse_structure
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
 # (see extract_pdms.ExtractPDM).
@@ -34,7 +34,7 @@ async def extract_pdf_text_task(
     notice matching `document`'s own doc_type/number/year; `text` is that
     narrowed notice, not the whole page. `structure` is that same narrowed
     text broken down into its Parte/Título/Capítulo/Secção/Subsecção/Artigo
-    hierarchy (see extract_pdms.services.StructureParser).
+    hierarchy (see minha_regiao.gazette.StructureParser).
 
     A PDF that downloads and parses fine but yields no text at all is an
     old, scanned regulation that needs OCR -- until OCR support exists,

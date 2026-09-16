@@ -10,6 +10,11 @@ class PendingDocument(BaseModel):
     # extract_rmues.tasks.FindPendingDocuments) -- there's no row id to
     # carry yet in that case.
     id: int | None = None
+    # Which RMUERegulation this document belongs to -- lets the caller
+    # group documents by city for per-city processing (see
+    # extract_rmues.tasks.ProcessCity) regardless of whether they came from
+    # a fresh page parse or a Postgres backlog query.
+    municipality: str
     name: str
     dre_url: str
     pdf_url: str | None = None

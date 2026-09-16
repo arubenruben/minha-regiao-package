@@ -82,10 +82,14 @@ async def find_documents_missing_pdf_url(db_url: str) -> list[PendingDocument]:
     async with connection(db_url):
         pending = []
         for table, model in _MODELS_BY_TABLE.items():
-            async for row in model.filter(pdf_url=None):
+            async for row in model.filter(pdf_url=None).select_related("city"):
                 pending.append(
                     PendingDocument(
-                        table=table, id=row.id, name=row.name, dre_url=row.dre_url
+                        table=table,
+                        id=row.id,
+                        municipality=row.city.name,
+                        name=row.name,
+                        dre_url=row.dre_url,
                     )
                 )
 
