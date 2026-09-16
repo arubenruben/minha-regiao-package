@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # run finishes, which isn't the shape OutputStore reads back on resume.
     state_file: Path = Path(__file__).with_name("out") / "state.json"
 
-    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
+    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
     # Which sinks the flow writes its PDM records to at the end of the run.
     # Defaults to JSON only, matching this flow's original (pre-Loader)

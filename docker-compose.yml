@@ -1,14 +1,3 @@
-# Reproduce the full pipeline stack with one command: `docker compose up`
-# brings up Postgres; `docker compose run --rm cli minha-regiao run
-# extract-geo` then runs a flow against it, entirely inside containers --
-# no local Python/uv/browser setup needed.
-#
-# This assumes you already have a Prefect instance running somewhere
-# (Prefect Cloud, or your own `prefect server start`) -- this file does not
-# start one for you. Point PREFECT_API_URL at it (see .env.example).
-#
-# This is distinct from dev.docker-compose.yml, which only brings up
-# Postgres for contributors iterating on a flow locally via `uv run`.
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -17,8 +6,10 @@ services:
       POSTGRES_USER: minha_regiao
       POSTGRES_PASSWORD: minha_regiao
       POSTGRES_DB: minha_regiao
+    # Host port Postgres is reachable on -- set POSTGRES_PORT (e.g. in a
+    # root .env) if 5432 is already taken by a local Postgres install.
     ports:
-      - "9001:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - minha_regiao_db:/var/lib/postgresql/data
     healthcheck:
@@ -26,30 +17,5 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  cli:
-    build: .
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      # Point this at your own already-running Prefect instance (Prefect
-      # Cloud, or `prefect server start` elsewhere) -- required, no default.
-      PREFECT_API_URL: ${PREFECT_API_URL:?Set PREFECT_API_URL to your running Prefect instance's API endpoint}
-      # Every flow's Settings.py defaults database_url to
-      # localhost:9001 -- correct for `uv run` on the host against
-      # dev.docker-compose.yml, but inside this container "localhost" is
-      # the container itself, not the postgres service. Override it to
-      # the in-network service name/port; pydantic-settings matches this
-      # against each flow's `database_url` field case-insensitively.
-      DATABASE_URL: postgres://minha_regiao:minha_regiao@postgres:5432/minha_regiao
-    # No long-running command -- this service is meant for
-    # `docker compose run --rm cli minha-regiao run <flow-name>` (or
-    # `minha-regiao list`), not `docker compose up`. Flow-specific secrets
-    # (HF_API_KEY, etc.) aren't set here -- pass them per-run, e.g.
-    # `docker compose run --rm -e HF_API_KEY=... cli minha-regiao run extract-geo`.
-    entrypoint: ["minha-regiao"]
-    command: ["--help"]
-
 volumes:
   minha_regiao_db:

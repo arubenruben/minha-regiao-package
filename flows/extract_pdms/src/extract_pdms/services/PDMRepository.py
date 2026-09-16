@@ -2,7 +2,7 @@ import logging
 
 from minha_regiao.database.DatabaseManager import connection
 from minha_regiao.entity.City import City
-from minha_regiao.entity.PDM import PDM
+from minha_regiao.entity.PDM import PDM, PDMDocument
 from minha_regiao.utils.FuzzyMatch import resolve_name
 
 from extract_pdms.schema.PDMRecord import PDMRecord
@@ -39,20 +39,47 @@ def _build_source_url(identifier: str) -> str:
     return f"{SNIT_PORTAL_URL}?catalogue={SNIT_CATALOGUE_ID}&identifier={identifier}"
 
 
+def _dump_structure(document: RegulationDocument) -> list[dict] | None:
+    return [node.model_dump(mode="json") for node in document.structure] if document.structure else None
+
+
+async def _persist_documents(pdm: PDM, documents: list[RegulationDocument]) -> None:
+    for document in documents:
+        await PDMDocument.update_or_create(
+            pdm=pdm,
+            url=str(document.url),
+            defaults={
+                "doc_type": document.doc_type,
+                "number": document.number,
+                "year": document.year,
+                "suffix": document.suffix,
+                "data_publicacao": document.data_publicacao,
+                "dinamica": document.dinamica,
+                "publicacao": document.publicacao,
+                "status": document.status.value,
+                "text": document.text,
+                "structure": _dump_structure(document),
+            },
+        )
+
+
 async def persist_pdms(db_url: str, records: list[PDMRecord]) -> int:
     """Matches each `PDMRecord`'s municipality against `City` (fuzzy, same
     as `extract_rmues.services.RMURepository.persist_rmue_regulations`) and
-    upserts one `PDM` row per city, using the most recent
-    successfully-extracted regulation document as `pdf_url`. Records that
-    don't match a city, or have no successfully-extracted document, are
-    skipped and logged rather than aborting the whole batch.
+    upserts one `PDM` row per city -- `title`/`identifier` straight off the
+    record, `pdf_url` set to the most recent successfully-extracted
+    regulation document's url (or left null if none extracted
+    successfully yet) -- plus one `PDMDocument` row per entry in
+    `record.documents`, capturing every revision's own extraction outcome
+    (`status`/`text`/`structure`), not just the latest one. Records that
+    don't match a city are skipped and logged rather than aborting the
+    whole batch.
     """
     async with connection(db_url):
         cities_by_name = {city.name: city async for city in City.all()}
 
         persisted = 0
         unmatched_cities: list[str] = []
-        skipped_no_document: list[str] = []
 
         for record in records:
             matched_name = resolve_name(record.municipio, cities_by_name)
@@ -60,25 +87,22 @@ async def persist_pdms(db_url: str, records: list[PDMRecord]) -> int:
                 unmatched_cities.append(record.municipio)
                 continue
 
-            document = _select_latest_document(record.documents)
-            if document is None:
-                skipped_no_document.append(record.municipio)
-                continue
-
             city = cities_by_name[matched_name]
+            latest_document = _select_latest_document(record.documents)
 
-            await PDM.update_or_create(
+            pdm, _ = await PDM.update_or_create(
                 city=city,
                 defaults={
+                    "title": record.title,
+                    "identifier": record.identifier,
                     "source_url": _build_source_url(record.identifier),
-                    "pdf_url": str(document.url),
+                    "pdf_url": str(latest_document.url) if latest_document else None,
                 },
             )
+            await _persist_documents(pdm, record.documents)
             persisted += 1
 
     if unmatched_cities:
         logger.warning(f"Unmatched municipalities: {sorted(unmatched_cities)}")
-    if skipped_no_document:
-        logger.warning(f"No successfully-extracted document for: {sorted(skipped_no_document)}")
 
     return persisted

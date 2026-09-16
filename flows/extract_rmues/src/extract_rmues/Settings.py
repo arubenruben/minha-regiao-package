@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     pdf_extract_concurrency: int = 8
     pdf_extract_timeout_seconds: float = 60.0
 
-    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
+    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
     # Which sinks the flow writes the enriched RMUE entries to. Defaults to
     # json-only, so reproducing this flow never requires a database; opt

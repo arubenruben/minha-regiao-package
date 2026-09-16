@@ -96,15 +96,48 @@ async def find_documents_missing_pdf_url(db_url: str) -> list[PendingDocument]:
     return pending
 
 
-async def update_pdf_urls(db_url: str, documents: list[PendingDocument]) -> int:
+def _dump_structure(document: RegulationDocument) -> list[dict] | None:
+    return [node.model_dump(mode="json") for node in document.structure] if document.structure else None
+
+
+async def persist_regulation_results(
+    db_url: str, entries: list[RMUERegulation]
+) -> tuple[int, list[str]]:
+    """Writes each document's resolved `pdf_url` and its extraction outcome
+    (`status`/`raw_text`/`structure`, see extract_rmues.tasks.ExtractNoticeText)
+    back onto its already-existing RMUE/FeeRegulation row (created by
+    `persist_rmue_regulations`), matched by (city, dre_url) -- mirrors
+    `persist_rmue_regulations`'s municipality matching. Unlike
+    `persist_rmue_regulations`, this only updates rows and never creates
+    new ones, since every document here should already have one. Returns
+    the number of rows updated and the municipality names that couldn't be
+    matched.
+    """
     async with connection(db_url):
-        updated = 0
-        for document in documents:
-            if document.pdf_url is None:
+        cities_by_name = {city.name: city async for city in City.all()}
+
+        persisted = 0
+        unmatched_cities: list[str] = []
+
+        for entry in entries:
+            matched_name = resolve_name(entry.municipality, cities_by_name)
+            if matched_name is None:
+                unmatched_cities.append(entry.municipality)
                 continue
 
-            model = _MODELS_BY_TABLE[document.table]
-            await model.filter(id=document.id).update(pdf_url=document.pdf_url)
-            updated += 1
+            city = cities_by_name[matched_name]
 
-    return updated
+            for table, documents in (
+                ("rmue", entry.urbanization_documents),
+                ("fee_regulation", entry.fee_documents),
+            ):
+                model = _MODELS_BY_TABLE[table]
+                for document in documents:
+                    persisted += await model.filter(city=city, dre_url=document.dre_url).update(
+                        pdf_url=document.pdf_url,
+                        status=document.status.value,
+                        raw_text=document.raw_text,
+                        structure=_dump_structure(document),
+                    )
+
+    return persisted, unmatched_cities

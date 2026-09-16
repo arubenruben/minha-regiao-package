@@ -13,7 +13,11 @@ extract_pdms/
   services/
     SnitSearch.py                searches SNIT for a municipality's PDM
     OutputStore.py                atomic, resumable per-document JSON cache
-    PDMRepository.py              persists PDMRecord -> the PDM table
+    PDMRepository.py              persists PDMRecord -> the PDM table (one
+                                    row per city, title/identifier/latest
+                                    pdf_url) plus one PDMDocument row per
+                                    regulation document (full history, each
+                                    with its own status/text/structure)
     ConcurrencyLimiter.py         registers the flow's tag-based concurrency limit
   exception/                    typed exceptions for PDF url/page-action failures
   out/pdms.json                 default JSON output (see load_targets below)
@@ -50,7 +54,7 @@ Settings are pydantic-settings, loaded from `extract_pdms/.env` — copy
 | `PDF_DOWNLOAD_TIMEOUT_SECONDS`   | `60.0`                                                       |                                                |
 | `OUTPUT_FILE`                    | `extract_pdms/out/pdms.json`                                 | used when `json` is in `LOAD_TARGETS`         |
 | `STATE_FILE`                     | `extract_pdms/out/state.json`                                | `OutputStore`'s resumable checkpoint           |
-| `DATABASE_URL`                   | `postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao` | used when `database` is in `LOAD_TARGETS`     |
+| `DATABASE_URL`                   | `postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao` | used when `database` is in `LOAD_TARGETS` (set `POSTGRES_PORT` at the repo root if 5432 is taken) |
 | `LOAD_TARGETS`                   | `["json"]`                                                   | which sinks to write to — `database`, `json`, or both (see [flows/CLAUDE.md](../../../CLAUDE.md) for the `Loader` pattern) |
 
 ## Running

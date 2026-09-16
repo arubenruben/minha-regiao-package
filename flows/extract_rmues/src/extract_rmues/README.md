@@ -17,6 +17,8 @@ extract_rmues/
                             metadata (doc_type/number/year) from its name
     PDFResolver.py          resolves a DR detail page to its PDF url
     RMURepository.py        persists RMUERegulation -> RMUE/FeeRegulation tables
+                            (rows, then each document's pdf_url/status/
+                            raw_text/structure)
     OutputStore.py          atomic, resumable per-document JSON cache
     ConcurrencyLimiter.py   registers Prefect tag-based concurrency limits
   tasks/                   one @task per flow step; process_city is fanned
@@ -36,7 +38,9 @@ structure uses `minha_regiao.gazette` (shared with `extract_pdms`, since
 these are the same kind of raw DR gazette page range) — see
 `tasks/ExtractNoticeText.py`. The result -- `pdf_url`, `status`, `raw_text`,
 and `structure` -- is recorded onto each document in `RMUERegulation` (see
-`schema/RMUERegulation.py`), not just proven end to end.
+`schema/RMUERegulation.py`), and, when `database` is in `LOAD_TARGETS`,
+written back onto the matching `RMUE`/`FeeRegulation` row by
+`tasks/PersistRegulationResults.py` -- not just the JSON output.
 
 ## Prerequisites
 
@@ -58,7 +62,7 @@ Settings are pydantic-settings, loaded from `extract_rmues/.env` — copy
 | `PDF_RESOLVE_CONCURRENCY` | `8`                                                            | DR detail pages resolved to a PDF url in parallel across all municipalities (each opens its own browser) |
 | `PDF_EXTRACT_CONCURRENCY` | `8`                                                            | resolved PDFs downloaded and segmented to their own notice text in parallel across all municipalities |
 | `PDF_EXTRACT_TIMEOUT_SECONDS` | `60.0`                                                     | timeout for downloading a single PDF                                          |
-| `DATABASE_URL`     | `postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao`   | used when `database` is in `LOAD_TARGETS`         |
+| `DATABASE_URL`     | `postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao`   | used when `database` is in `LOAD_TARGETS` (set `POSTGRES_PORT` at the repo root if 5432 is taken) |
 | `LOAD_TARGETS`     | `["json"]`                                                            | `database`, `json`, or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
 | `OUTPUT_FILE`      | `extract_rmues/out/rmues.json`                                       | used when `json` is in `LOAD_TARGETS`             |
 | `STATE_FILE`       | `extract_rmues/out/rmue_state.json`                                  | `OutputStore`'s resumable checkpoint — see "Idempotence" below |
@@ -77,9 +81,12 @@ municipality (`process_city_task`, see `tasks/ProcessCity.py`) to resolve
 that city's documents' PDF urls and extract their own notice text/
 structure. Its document source is gated by `load_targets`: with `database`
 it resolves every document still missing a `pdf_url` in Postgres (including
-backlog from prior runs) and writes resolved urls back there; with the
-default `["json"]`, it resolves only this run's freshly-parsed documents in
-memory — so the flow needs no database at all.
+backlog from prior runs); with the default `["json"]`, it resolves only
+this run's freshly-parsed documents in memory — so the flow needs no
+database at all. Once every municipality is processed, with `database` in
+`load_targets` each document's `pdf_url`/`status`/`raw_text`/`structure` is
+written back onto its `RMUE`/`FeeRegulation` row (`tasks/
+PersistRegulationResults.py`).
 
 ## Concurrency
 

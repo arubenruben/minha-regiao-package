@@ -44,7 +44,7 @@ needs. Copy each `.env.example` to `.env` next to it and fill in values.
 
 | Variable            | Default                                                    | Notes                                   |
 |---------------------|-------------------------------------------------------------|------------------------------------------|
-| `DATABASE_URL`       | `postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao` | matches `dev.docker-compose.yml`         |
+| `DATABASE_URL`       | `postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao` | matches `dev.docker-compose.yml` (set `POSTGRES_PORT` at the repo root if 5432 is taken) |
 | `HF_API_KEY`         | _(none)_                                                   | Hugging Face write token                 |
 | `GEO_DATASET_REPO_ID`| `minharegiao/portuguese-geo`                               | destination repo for both configs        |
 

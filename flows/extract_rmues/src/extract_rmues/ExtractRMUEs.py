@@ -13,10 +13,10 @@ from extract_rmues.tasks.ExtractNoticeText import EXTRACT_NOTICE_TEXT_TAG
 from extract_rmues.tasks.FetchRmuePage import fetch_rmue_page_task
 from extract_rmues.tasks.FindPendingDocuments import find_pending_documents_task
 from extract_rmues.tasks.ParseRmuePage import parse_rmue_page_task
+from extract_rmues.tasks.PersistRegulationResults import persist_regulation_results_task
 from extract_rmues.tasks.PersistRmueRegulations import persist_rmue_page_task
 from extract_rmues.tasks.ProcessCity import PROCESS_CITY_TAG, process_city_task
 from extract_rmues.tasks.ResolvePdfUrl import RESOLVE_PDF_URL_TAG
-from extract_rmues.tasks.UpdatePdfUrls import update_pdf_urls_task
 from extract_rmues.tasks.WriteRmueJson import write_rmue_page_json_task
 
 
@@ -83,8 +83,11 @@ async def extract_rmues(base_url: str) -> int:
             resolved.extend(cast("list[PendingDocument]", future.result()))
             progress.update(1)
 
-    updated = await update_pdf_urls_task(resolved)
+    updated = sum(1 for document in resolved if document.pdf_url is not None)
     logger.info(f"Resolved {updated}/{len(pending_documents)} PDF urls in total")
+
+    if "database" in settings.load_targets:
+        await persist_regulation_results_task(output_store.records)
 
     if "json" in settings.load_targets:
         await write_rmue_page_json_task(output_store.records)
