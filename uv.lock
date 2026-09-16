@@ -888,7 +888,6 @@ dependencies = [
     { name = "httpx" },
     { name = "minha-regiao" },
     { name = "prefect", extra = ["docker"] },
-    { name = "pypdf" },
     { name = "scrapling", extra = ["fetchers"] },
     { name = "tqdm" },
 ]
@@ -898,7 +897,6 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "minha-regiao", editable = "minha_regiao" },
     { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
-    { name = "pypdf", specifier = ">=6.14.2" },
     { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
     { name = "tqdm", specifier = ">=4.68.4" },
 ]
@@ -908,6 +906,7 @@ name = "extract-rmues"
 version = "0.1.0"
 source = { editable = "flows/extract_rmues" }
 dependencies = [
+    { name = "httpx" },
     { name = "minha-regiao" },
     { name = "prefect", extra = ["docker"] },
     { name = "scrapling", extra = ["fetchers"] },
@@ -915,6 +914,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "minha-regiao", editable = "minha_regiao" },
     { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
     { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
@@ -1864,6 +1864,7 @@ dependencies = [
     { name = "levenshtein" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pypdf" },
     { name = "tortoise-orm", extra = ["asyncpg"] },
 ]
 
@@ -1876,6 +1877,7 @@ requires-dist = [
     { name = "levenshtein", specifier = ">=0.27.3" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "pypdf", specifier = ">=6.14.2" },
     { name = "tortoise-orm", extras = ["asyncpg"], specifier = ">=1.1.7" },
 ]
 

@@ -1,22 +1,25 @@
 import re
 
-from extract_pdms.exception.GazetteNoticeNotFoundError import GazetteNoticeNotFoundError
+from minha_regiao.gazette.exception.GazetteNoticeNotFoundError import (
+    GazetteNoticeNotFoundError,
+)
 
 # A downloaded regulation PDF is not scoped to one regulation -- it's a raw
 # Diário da República page range, which bundles the target notice alongside
 # unrelated notices from other municipalities (and other entities: personnel
 # appointments, competitions, editais, ...) published on the same page(s).
-# This module locates the one notice that matches a RegulationDocument's own
-# doc_type/number/year (parsed from its PDF filename by
-# extract_pdms.services.SnitSearch.parse_pdf_metadata) and slices the text
-# down to just that notice, so extract_pdms.services.StructureParser only
-# ever sees the regulation it's actually meant to parse.
+# This module locates the one notice that matches a document's own
+# doc_type/number/year (e.g. parsed from a SNIT PDF filename, or from a DR
+# listing page's own document name) and slices the text down to just that
+# notice, so a caller's own structure parser only ever sees the regulation
+# it's actually meant to parse.
 
-# dre.pt's own PDF-filename doc_type abbreviation (see SnitSearch.
-# PDF_FILENAME_PATTERN) mapped to the heading phrase it's printed as in the
-# gazette body, e.g. "AVISO 5423_2014.pdf" -> "Aviso n.º 5423/2014". Extend
-# this as new doc_types are encountered -- an unmapped one is treated as a
-# match failure (see find_notice_text) rather than guessed at.
+# dre.pt's own PDF-filename doc_type abbreviation (see e.g. extract_pdms.
+# services.SnitSearch.PDF_FILENAME_PATTERN) mapped to the heading phrase
+# it's printed as in the gazette body, e.g. "AVISO 5423_2014.pdf" -> "Aviso
+# n.º 5423/2014". Extend this as new doc_types are encountered -- an
+# unmapped one is treated as a match failure (see find_notice_text) rather
+# than guessed at.
 _DOC_TYPE_HEADINGS: dict[str, str] = {
     "AVISO": "Aviso",
     "EDITAL": "Edital",
@@ -31,6 +34,7 @@ _DOC_TYPE_HEADINGS: dict[str, str] = {
     "DEC": "Decreto",
     "LEI": "Lei",
     "DELIB": "Deliberação",
+    "REGULAMENTO": "Regulamento",
 }
 
 # Marks the start of a new publishing entity's section (e.g. "MUNICÍPIO DE
@@ -112,24 +116,44 @@ def _target_header_pattern(heading_phrase: str, number: str, year: int, suffix: 
 
 
 def find_notice_text(text: str, doc_type: str, number: str, year: int, suffix: int | None = None) -> str:
-    """Returns the slice of `text` -- from its own "<heading> n.º
-    <number>/<year>" header line up to (but not including) whichever comes
-    first of the next entity header or the next notice header, or the end
-    of `text` if neither occurs again -- that belongs to the notice
-    identified by `doc_type`/`number`/`year`/`suffix`.
+    """Returns the slice of `text` belonging to the notice identified by
+    `doc_type` (a SNIT/dre.pt PDF-filename abbreviation, e.g. "AVISO",
+    looked up in `_DOC_TYPE_HEADINGS`) /`number`/`year`/`suffix`.
 
-    Raises GazetteNoticeNotFoundError, rather than falling back to the full
-    text, when `doc_type` has no known heading mapping or when no line in
-    `text` matches the resulting header: both are signs the matching
-    mechanism needs to be extended, not conditions to paper over.
+    Raises GazetteNoticeNotFoundError when `doc_type` has no known heading
+    mapping. See `find_notice_text_by_heading` for the actual slicing
+    logic and its own docstring for the rest of the contract.
     """
     heading_phrase = _DOC_TYPE_HEADINGS.get(doc_type.upper())
     if heading_phrase is None:
         raise GazetteNoticeNotFoundError(
             f"No known Diário da República heading phrase for doc_type {doc_type!r} "
-            "-- add it to extract_pdms.services.GazetteSegmenter._DOC_TYPE_HEADINGS"
+            "-- add it to minha_regiao.gazette.GazetteSegmenter._DOC_TYPE_HEADINGS"
         )
 
+    return find_notice_text_by_heading(text, heading_phrase, number, year, suffix)
+
+
+def find_notice_text_by_heading(
+    text: str, heading_phrase: str, number: str, year: int, suffix: int | None = None
+) -> str:
+    """Returns the slice of `text` -- from its own "<heading_phrase> n.º
+    <number>/<year>" header line up to (but not including) whichever comes
+    first of the next entity header or the next notice header, or the end
+    of `text` if neither occurs again -- that belongs to that notice.
+
+    Takes the DR heading phrase directly (e.g. "Aviso", "Regulamento"),
+    rather than a SNIT filename doc_type abbreviation -- for callers (e.g.
+    extract_rmues, whose document names already carry the literal heading
+    phrase as printed on the DR listing page) that have no abbreviated code
+    to look up. See `find_notice_text` for the abbreviation-based entry
+    point extract_pdms uses.
+
+    Raises GazetteNoticeNotFoundError when no line in `text` matches the
+    resulting header: a heuristic miss should surface loudly rather than
+    fall back to the full text, which risks returning an unrelated
+    municipality's content.
+    """
     lines = text.splitlines()
     target_pattern = _target_header_pattern(heading_phrase, number, year, suffix)
 

@@ -5,8 +5,8 @@ import httpx
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from extract_pdms.exception.PdfDownloadError import PdfDownloadError
-from extract_pdms.exception.PdfTextExtractionError import PdfTextExtractionError
+from minha_regiao.gazette.exception.PdfDownloadError import PdfDownloadError
+from minha_regiao.gazette.exception.PdfTextExtractionError import PdfTextExtractionError
 
 
 async def download_pdf(client: httpx.AsyncClient, url: str, dest_dir: Path, timeout_seconds: float) -> Path:

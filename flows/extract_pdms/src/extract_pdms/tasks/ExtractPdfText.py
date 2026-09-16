@@ -3,13 +3,13 @@ from pathlib import Path
 import httpx
 from prefect import get_run_logger, task
 
-from extract_pdms.exception.GazetteNoticeNotFoundError import GazetteNoticeNotFoundError
-from extract_pdms.exception.PdfDownloadError import PdfDownloadError
-from extract_pdms.exception.PdfTextExtractionError import PdfTextExtractionError
 from extract_pdms.schema.RegulationDocument import DocumentStatus, RegulationDocument
-from extract_pdms.services.GazetteSegmenter import find_notice_text
-from extract_pdms.services.PdfTextExtractor import download_pdf, extract_text
 from extract_pdms.services.StructureParser import parse_structure
+from minha_regiao.gazette.exception.GazetteNoticeNotFoundError import GazetteNoticeNotFoundError
+from minha_regiao.gazette.exception.PdfDownloadError import PdfDownloadError
+from minha_regiao.gazette.exception.PdfTextExtractionError import PdfTextExtractionError
+from minha_regiao.gazette.GazetteSegmenter import find_notice_text
+from minha_regiao.gazette.PdfTextExtractor import download_pdf, extract_text
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
 # (see extract_pdms.ExtractPDM).
@@ -29,7 +29,7 @@ async def extract_pdf_text_task(
     The downloaded PDF is a raw Diário da República page range, not a file
     scoped to this one regulation -- it can bundle unrelated notices from
     other municipalities/entities published on the same page(s) (see
-    extract_pdms.services.GazetteSegmenter). So the page's full extracted
+    minha_regiao.gazette.GazetteSegmenter). So the page's full extracted
     text is immediately narrowed, via `find_notice_text`, to just the
     notice matching `document`'s own doc_type/number/year; `text` is that
     narrowed notice, not the whole page. `structure` is that same narrowed

@@ -19,7 +19,19 @@ class Settings(BaseSettings):
     # browsers are open concurrently.
     pdf_resolve_concurrency: int = 8
 
+    # How many resolved PDFs are downloaded and segmented to their own
+    # notice text in parallel (see extract_rmues.tasks.ExtractNoticeText).
+    pdf_extract_concurrency: int = 8
+    pdf_extract_timeout_seconds: float = 60.0
+
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
+
+    # Only used when "database" isn't in load_targets: persists resolved PDF
+    # urls across runs (see extract_rmues.services.ResolutionStore) so a
+    # database-free run doesn't reopen a browser for a document already
+    # resolved by a previous run. Ignored otherwise, since Postgres is
+    # already that list's source of truth then.
+    resolution_state_file: Path = Path(__file__).with_name("out") / "rmue_resolved_documents.json"
 
     # Which sinks the flow writes the parsed RMUE entries to. Defaults to
     # json-only, so reproducing this flow never requires a database; opt

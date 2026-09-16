@@ -9,10 +9,15 @@ from extract_rmues.schema.PendingDocument import PendingDocument
 from extract_rmues.schema.RMUERegulation import RegulationDocument, RMUERegulation
 from extract_rmues.services.RegulationMetadata import extract_year, is_complete
 
-_MODELS_BY_TABLE: dict[str, type[Model]] = {"rmue": RMUE, "fee_regulation": FeeRegulation}
+_MODELS_BY_TABLE: dict[str, type[Model]] = {
+    "rmue": RMUE,
+    "fee_regulation": FeeRegulation,
+}
 
 
-async def _persist_documents(model: type[Model], city: City, documents: list[RegulationDocument]) -> tuple[int, list[str]]:
+async def _persist_documents(
+    model: type[Model], city: City, documents: list[RegulationDocument]
+) -> tuple[int, list[str]]:
     persisted = 0
     skipped = []
 
@@ -25,7 +30,11 @@ async def _persist_documents(model: type[Model], city: City, documents: list[Reg
         _, created = await model.get_or_create(
             city=city,
             dre_url=document.dre_url,
-            defaults={"year": year, "name": document.name, "is_complete": is_complete(document.name)},
+            defaults={
+                "year": year,
+                "name": document.name,
+                "is_complete": is_complete(document.name),
+            },
         )
         if created:
             persisted += 1
@@ -33,7 +42,9 @@ async def _persist_documents(model: type[Model], city: City, documents: list[Reg
     return persisted, skipped
 
 
-async def persist_rmue_regulations(db_url: str, entries: list[RMUERegulation]) -> tuple[int, list[str], list[str]]:
+async def persist_rmue_regulations(
+    db_url: str, entries: list[RMUERegulation]
+) -> tuple[int, list[str], list[str]]:
     """Matches each entry's municipality name against `City` and upserts one
     `RMUE`/`FeeRegulation` row per document. Returns the number of rows
     created, the municipality names that couldn't be matched, and the
@@ -54,8 +65,12 @@ async def persist_rmue_regulations(db_url: str, entries: list[RMUERegulation]) -
 
             city = cities_by_name[matched_name]
 
-            rmue_persisted, rmue_skipped = await _persist_documents(RMUE, city, entry.urbanization_documents)
-            fee_persisted, fee_skipped = await _persist_documents(FeeRegulation, city, entry.fee_documents)
+            rmue_persisted, rmue_skipped = await _persist_documents(
+                RMUE, city, entry.urbanization_documents
+            )
+            fee_persisted, fee_skipped = await _persist_documents(
+                FeeRegulation, city, entry.fee_documents
+            )
 
             persisted += rmue_persisted + fee_persisted
             skipped_documents.extend(rmue_skipped + fee_skipped)
@@ -68,7 +83,11 @@ async def find_documents_missing_pdf_url(db_url: str) -> list[PendingDocument]:
         pending = []
         for table, model in _MODELS_BY_TABLE.items():
             async for row in model.filter(pdf_url=None):
-                pending.append(PendingDocument(table=table, id=row.id, dre_url=row.dre_url))
+                pending.append(
+                    PendingDocument(
+                        table=table, id=row.id, name=row.name, dre_url=row.dre_url
+                    )
+                )
 
     return pending
 

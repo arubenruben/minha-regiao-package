@@ -12,6 +12,7 @@ dependencies = [
     "minha_regiao",
     "prefect[docker]>=3.6.12",
     "scrapling[fetchers]>=0.4.10",
+    "httpx>=0.28.1",
 ]
 
 [tool.uv.sources]

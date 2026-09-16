@@ -20,7 +20,7 @@ class DocumentStatus(str, Enum):
     # Extraction succeeded, but this document's own notice (identified by
     # doc_type/number/year) couldn't be located inside the downloaded
     # Diário da República page range -- see
-    # extract_pdms.services.GazetteSegmenter.find_notice_text.
+    # minha_regiao.gazette.GazetteSegmenter.find_notice_text.
     NOTICE_NOT_FOUND = "notice_not_found"
 
 
@@ -46,7 +46,7 @@ class RegulationDocument(BaseModel):
     # isolated from the page range, so there's nothing reliable to report.
     # When `status` is OK, `text` is *not* the whole downloaded page's raw
     # text -- it's already narrowed, by
-    # extract_pdms.services.GazetteSegmenter.find_notice_text, to just this
+    # minha_regiao.gazette.GazetteSegmenter.find_notice_text, to just this
     # document's own notice within that (possibly multi-municipality) page
     # range. `structure` is that same narrowed text broken down into its
     # nested Parte/Título/Capítulo/Secção/Subsecção/Artigo hierarchy (see
