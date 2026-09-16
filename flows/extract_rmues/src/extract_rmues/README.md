@@ -8,13 +8,17 @@ República website, by city.
 extract_rmues/
   ExtractRMUEs.py          the flow: parse the RMUE page, persist, then
                             resolve each document's PDF url
-  Settings.py / .env       source URL, database, and load_targets
+  Settings.py / .env       source URL, database, load_targets, concurrency
   schema/                  RMUERegulation, PendingDocument
   services/
     RMUEPageParser.py       parses the DR listing page
     RegulationMetadata.py   extracts a document's year/completeness from its name
     PDFResolver.py          resolves a DR detail page to its PDF url
     RMURepository.py        persists RMUERegulation -> RMUE/FeeRegulation tables
+    ConcurrencyLimiter.py   registers Prefect tag-based concurrency limits
+  tasks/                   one @task per flow step; resolve_pdf_url is
+                            tagged and fanned out via .map(), capped by
+                            pdf_resolve_concurrency (see flows/CLAUDE.md)
 ```
 
 ## Prerequisites
@@ -33,6 +37,7 @@ Settings are pydantic-settings, loaded from `extract_rmues/.env` — copy
 | Variable        | Default                                                            | Notes                                          |
 |------------------|----------------------------------------------------------------------|--------------------------------------------------|
 | `RMUE_URL`        | DR municipal regulations listing page                                |                                                    |
+| `PDF_RESOLVE_CONCURRENCY` | `8`                                                            | DR detail pages resolved to a PDF url in parallel (each opens its own browser) |
 | `DATABASE_URL`     | `postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao`   | used when `database` is in `LOAD_TARGETS`         |
 | `LOAD_TARGETS`     | `["json"]`                                                            | `database`, `json`, or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
 | `OUTPUT_FILE`      | `extract_rmues/out/rmues.json`                                       | used when `json` is in `LOAD_TARGETS`             |

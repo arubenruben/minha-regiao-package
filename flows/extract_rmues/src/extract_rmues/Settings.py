@@ -13,6 +13,12 @@ class Settings(BaseSettings):
 
     rmue_url: str = "https://diariodarepublica.pt/dr/geral/areas-tematicas/regul-municipais"
 
+    # How many DR detail pages are resolved to their PDF url in parallel.
+    # Each resolution opens its own browser (see
+    # extract_rmues.tasks.ResolvePdfUrl), so this also bounds how many
+    # browsers are open concurrently.
+    pdf_resolve_concurrency: int = 8
+
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
 
     # Which sinks the flow writes the parsed RMUE entries to. Defaults to
