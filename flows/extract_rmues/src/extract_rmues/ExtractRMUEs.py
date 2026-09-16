@@ -1,106 +1,23 @@
 import asyncio
+from collections import defaultdict
+from typing import cast
 
-from prefect import flow, task, get_run_logger
-from prefect.cache_policies import NO_CACHE
-from scrapling.fetchers import AsyncStealthySession, StealthyFetcher
-from scrapling.parser import Selector
+from prefect import flow, get_run_logger, unmapped
+from tqdm import tqdm
 
-from extract_rmues.Settings import settings
 from extract_rmues.schema.PendingDocument import PendingDocument
-from extract_rmues.schema.RMUERegulation import RMUERegulation
-from extract_rmues.services.PDFResolver import resolve_pdf_url
-from extract_rmues.services.RMUEPageParser import parse_rmue_regulations
-from extract_rmues.services.RMURepository import (
-    find_documents_missing_pdf_url,
-    persist_rmue_regulations,
-    update_pdf_urls,
-)
-
-# How many DR detail pages to resolve per batch, and concurrently within
-# that batch, through a single shared browser (as tabs in its page pool).
-# Each batch is persisted before moving on to the next one, so a failure
-# partway through only loses the in-flight batch, not everything resolved
-# so far.
-PDF_BATCH_SIZE = 8
-
-
-@task(name="fetch_rmue_page")
-async def fetch_rmue_page(url: str) -> Selector:
-    logger = get_run_logger()
-    logger.info(f"Fetching RMUE page from {url}")
-
-    page = await StealthyFetcher.async_fetch(url, headless=True, network_idle=True)
-
-    logger.info("Fetched RMUE page")
-    return page
-
-
-@task(name="parse_rmue_page", cache_policy=NO_CACHE)
-async def parse_rmue_page(page: Selector) -> list[RMUERegulation]:
-    logger = get_run_logger()
-
-    entries = parse_rmue_regulations(page)
-
-    logger.info(f"Parsed {len(entries)} municipalities from the RMUE page")
-    return entries
-
-
-@task(name="persist_rmue_regulations")
-async def persist_rmue_page(entries: list[RMUERegulation]) -> int:
-    logger = get_run_logger()
-
-    persisted, unmatched_cities, skipped_documents = await persist_rmue_regulations(settings.database_url, entries)
-
-    logger.info(f"Persisted {persisted} regulation documents")
-    if unmatched_cities:
-        logger.warning(f"Unmatched municipalities: {sorted(unmatched_cities)}")
-    if skipped_documents:
-        logger.warning(f"Skipped documents (no parseable year): {sorted(skipped_documents)}")
-
-    return persisted
-
-
-@task(name="find_documents_missing_pdf_url")
-async def find_pending_documents() -> list[PendingDocument]:
-    logger = get_run_logger()
-
-    documents = await find_documents_missing_pdf_url(settings.database_url)
-
-    logger.info(f"Found {len(documents)} documents missing a PDF url")
-    return documents
-
-
-async def _resolve_document(session: AsyncStealthySession, document: PendingDocument, logger) -> PendingDocument:
-    try:
-        pdf_url = await resolve_pdf_url(session, document.dre_url)
-    except Exception:
-        logger.warning(f"Failed to fetch {document.dre_url}", exc_info=True)
-        pdf_url = None
-
-    if pdf_url is None:
-        logger.warning(f"No PDF link found on {document.dre_url}")
-
-    return document.model_copy(update={"pdf_url": pdf_url})
-
-
-@task(name="resolve_pdf_urls")
-async def resolve_pdf_urls(documents: list[PendingDocument]) -> int:
-    logger = get_run_logger()
-
-    persisted = 0
-    async with AsyncStealthySession(headless=True, network_idle=True, max_pages=PDF_BATCH_SIZE) as session:
-        for start in range(0, len(documents), PDF_BATCH_SIZE):
-            batch = documents[start : start + PDF_BATCH_SIZE]
-
-            resolved = await asyncio.gather(*(_resolve_document(session, document, logger) for document in batch))
-            updated = await update_pdf_urls(settings.database_url, resolved)
-            persisted += updated
-
-            batch_number = start // PDF_BATCH_SIZE + 1
-            logger.info(f"Batch {batch_number}: persisted {updated}/{len(batch)} PDF urls")
-
-    logger.info(f"Resolved and persisted {persisted}/{len(documents)} PDF urls in total")
-    return persisted
+from extract_rmues.services.ConcurrencyLimiter import ensure_concurrency_limit
+from extract_rmues.services.OutputStore import OutputStore
+from extract_rmues.Settings import settings
+from extract_rmues.tasks.ExtractNoticeText import EXTRACT_NOTICE_TEXT_TAG
+from extract_rmues.tasks.FetchRmuePage import fetch_rmue_page_task
+from extract_rmues.tasks.FindPendingDocuments import find_pending_documents_task
+from extract_rmues.tasks.ParseRmuePage import parse_rmue_page_task
+from extract_rmues.tasks.PersistRegulationResults import persist_regulation_results_task
+from extract_rmues.tasks.PersistRmueRegulations import persist_rmue_page_task
+from extract_rmues.tasks.ProcessCity import PROCESS_CITY_TAG, process_city_task
+from extract_rmues.tasks.ResolvePdfUrl import RESOLVE_PDF_URL_TAG
+from extract_rmues.tasks.WriteRmueJson import write_rmue_page_json_task
 
 
 @flow(
@@ -108,12 +25,74 @@ async def resolve_pdf_urls(documents: list[PendingDocument]) -> int:
     description="Extract and index RMUE and municipal fee regulations from the Diário da República website by city.",
 )
 async def extract_rmues(base_url: str) -> int:
-    page = await fetch_rmue_page(base_url)
-    entries = await parse_rmue_page(page)
-    await persist_rmue_page(entries)
+    """Fans out one Prefect task run per municipality via `.map()`, capped
+    at `settings.city_concurrency` concurrently running task runs (see the
+    PROCESS_CITY_TAG concurrency limit registered below) -- mirrors
+    extract_pdms.ExtractPDM.extract_pdms' per-municipality fan-out. Each
+    municipality's own PDF resolution and notice-text extraction are
+    further capped by their own tag-based concurrency limits
+    (RESOLVE_PDF_URL_TAG / EXTRACT_NOTICE_TEXT_TAG), so the total number of
+    browsers/downloads in flight stays bounded regardless of how many
+    municipalities are processed at once (see
+    extract_rmues.tasks.ProcessCity).
 
-    pending_documents = await find_pending_documents()
-    return await resolve_pdf_urls(pending_documents)
+    Idempotent and resumable, at the document level: `output_store`
+    persists each document's PDF-resolution/text-extraction result --
+    keyed by dre_url, via its own locked critical section (see
+    OutputStore.record) -- to `settings.state_file` as soon as each city
+    finishes, and a document already recorded there (regardless of whether
+    it succeeded) is reused on the next run instead of being re-resolved
+    and re-extracted. See extract_rmues.tasks.ProcessCity.
+    """
+    logger = get_run_logger()
+
+    page = await fetch_rmue_page_task(base_url)
+    entries = await parse_rmue_page_task(page)
+
+    if "database" in settings.load_targets:
+        await persist_rmue_page_task(entries)
+
+    # Only meaningful (and only touched) when "database" is in
+    # load_targets: this returns every document still missing a PDF url in
+    # Postgres, including backlog from prior runs. Otherwise falls back to
+    # this run's freshly-parsed entries in-memory, so the flow needs no
+    # database at all.
+    pending_documents = await find_pending_documents_task(entries)
+
+    documents_by_municipality: dict[str, list[PendingDocument]] = defaultdict(list)
+    for document in pending_documents:
+        documents_by_municipality[document.municipality].append(document)
+    municipalities = list(documents_by_municipality.items())
+
+    output_store = OutputStore(settings.state_file)
+
+    await ensure_concurrency_limit(PROCESS_CITY_TAG, settings.city_concurrency)
+    await ensure_concurrency_limit(RESOLVE_PDF_URL_TAG, settings.pdf_resolve_concurrency)
+    await ensure_concurrency_limit(EXTRACT_NOTICE_TEXT_TAG, settings.pdf_extract_concurrency)
+
+    futures = process_city_task.map(
+        [municipality for municipality, _ in municipalities],
+        [documents for _, documents in municipalities],
+        unmapped(output_store),
+    )
+
+    resolved: list[PendingDocument] = []
+
+    with tqdm(total=len(municipalities), desc="Processing cities", unit="city") as progress:
+        for future in futures:
+            resolved.extend(cast("list[PendingDocument]", future.result()))
+            progress.update(1)
+
+    updated = sum(1 for document in resolved if document.pdf_url is not None)
+    logger.info(f"Resolved {updated}/{len(pending_documents)} PDF urls in total")
+
+    if "database" in settings.load_targets:
+        await persist_regulation_results_task(output_store.records)
+
+    if "json" in settings.load_targets:
+        await write_rmue_page_json_task(output_store.records)
+
+    return updated
 
 
 if __name__ == "__main__":

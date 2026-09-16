@@ -5,7 +5,8 @@ from minha_regiao.entity.District import District
 from minha_regiao.entity.ElectoralCircle import ElectoralCircle
 from minha_regiao.entity.FeeRegulation import FeeRegulation
 from minha_regiao.entity.Parish import Parish
-from minha_regiao.entity.PDM import PDM
+from minha_regiao.entity.PDM import PDM, PDMDocument
+from minha_regiao.entity.RegulationDocumentStatus import RegulationDocumentStatus
 from minha_regiao.entity.RMUE import RMUE
 from minha_regiao.entity import elections
 
@@ -18,6 +19,8 @@ __all__ = [
     "FeeRegulation",
     "Parish",
     "PDM",
+    "PDMDocument",
+    "RegulationDocumentStatus",
     "RMUE",
     "elections",
 ]

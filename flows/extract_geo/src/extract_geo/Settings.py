@@ -9,7 +9,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
+    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
     hf_api_key: str | None = None
     geo_dataset_repo_id: str = "minharegiao/portuguese-geo"

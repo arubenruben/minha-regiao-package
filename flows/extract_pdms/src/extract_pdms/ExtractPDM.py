@@ -1,146 +1,119 @@
 import asyncio
+import tempfile
+from pathlib import Path
+from typing import cast
 
-import httpx
-from prefect import flow, task, get_run_logger
-from scrapling.fetchers import AsyncStealthySession
+from prefect import flow, get_run_logger, task, unmapped
 from tqdm import tqdm
 
-from extract_pdms.Settings import settings
-from extract_pdms.schema.CityWebsite import CityWebsite
-from extract_pdms.schema.PDMResult import PDMResult
+from extract_pdms.schema.PDMRecord import PDMRecord
+from extract_pdms.services import SnitSearch
 from extract_pdms.services.ConcurrencyLimiter import ensure_concurrency_limit
-from extract_pdms.services.PDMRepository import find_cities_missing_pdm, persist_pdm_results
-from extract_pdms.services.SiteCrawler import SiteBlockedError, find_pdm
+from extract_pdms.services.OutputStore import OutputStore
+from extract_pdms.services.PDMRepository import persist_pdms
+from extract_pdms.Settings import settings
+from minha_regiao.loader.DatabaseLoader import DatabaseLoader
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
+from extract_pdms.tasks.ExtractPdfText import EXTRACT_PDF_TEXT_TAG
+from extract_pdms.tasks.FetchRegulationDocuments import FETCH_REGULATION_DOCUMENTS_TAG
+from extract_pdms.tasks.ProcessMunicipio import (
+    PROCESS_MUNICIPIO_TAG,
+    process_municipio_task,
+)
+from extract_pdms.tasks.SearchMunicipio import SEARCH_MUNICIPIO_TAG
 
-# Tag applied to every city-crawl task run. Paired with a Prefect tag-based
-# concurrency limit (see `ensure_concurrency_limit` below) so that "how many
-# town hall sites we hit at once" is enforced by the Prefect server itself,
-# not just by the local semaphore in `crawl_cities_for_pdm` -- the two
-# mechanisms are deliberately kept in lockstep (see comment there) so a
-# 403-triggering burst of crawls can't slip past the server-side limit.
-CITY_CRAWL_TAG = "pdm-city-crawl"
 
-
-@task(name="find_cities_missing_pdm")
-async def find_pending_cities() -> list[CityWebsite]:
+@task(name="persist_pdms")
+async def persist_pdms_task(records: list[PDMRecord]) -> None:
     logger = get_run_logger()
 
-    cities = await find_cities_missing_pdm(settings.database_url)
+    loader = DatabaseLoader[PDMRecord](
+        lambda batch: persist_pdms(settings.database_url, batch)
+    )
+    await loader.load(records)
 
-    logger.info(f"Found {len(cities)} cities without a resolved PDM")
-    return cities
+    logger.info(
+        f"Persisted PDM records for {len(records)} municipalities to the database"
+    )
 
 
-@flow(name="crawl_cities_for_pdm")
-async def crawl_cities_for_pdm(cities: list[CityWebsite]) -> int:
+@task(name="write_pdms_json")
+async def write_pdms_json_task(records: list[PDMRecord]) -> None:
     logger = get_run_logger()
 
-    city_concurrency = settings.city_concurrency
-    # The browser's tab pool needs a slot for every page that can be in
-    # flight at once: one city batch, each city fetching up to
-    # site_concurrency pages of its own.
-    max_pages = city_concurrency * settings.site_concurrency
+    await JsonFileLoader[PDMRecord](settings.output_file).load(records)
 
-    # Registers (upserts) the server-side Prefect concurrency limit that
-    # caps CITY_CRAWL_TAG task runs. This alone would only make Prefect
-    # *queue* excess task runs rather than reject them, but submitting all
-    # `len(cities)` task runs at once (e.g. via asyncio.gather) still means
-    # every one of them races to acquire a concurrency-slot lease
-    # simultaneously, which can flood Prefect's lease-acquisition service
-    # under a large batch. The asyncio.Semaphore below is sized to the same
-    # limit so at most `city_concurrency` task runs are ever created at
-    # once, keeping lease acquisition prompt instead of queued.
-    await ensure_concurrency_limit(CITY_CRAWL_TAG, city_concurrency)
-    semaphore = asyncio.Semaphore(city_concurrency)
-
-    persisted = 0
-    pending_results: list[PDMResult] = []
-
-    async def flush() -> None:
-        nonlocal persisted
-        updated = await persist_pdm_results(settings.database_url, pending_results)
-        persisted += updated
-        logger.info(f"Persisted {updated}/{len(pending_results)} PDMs (running total: {persisted})")
-        pending_results.clear()
-
-    # One browser is shared across every city (its tab pool is sized to
-    # max_pages above) since launching a stealth browser per city would be
-    # far more expensive than a tab in an already-running one. `crawl_city`
-    # closes over it instead of taking it as a task argument so Prefect
-    # never has to hash a live session into a cache key. httpx clients are
-    # cheap and pool connections per-host, which buys nothing shared across
-    # cities that are all different hosts anyway, so each city just opens
-    # its own.
-    async with AsyncStealthySession(headless=True, network_idle=True, max_pages=max_pages) as session:
-
-        @task(
-            name="crawl_city_for_pdm",
-            task_run_name="crawl-city-{city.website}",
-            persist_result=False,
-            tags=[CITY_CRAWL_TAG],
-        )
-        async def crawl_city(city: CityWebsite) -> PDMResult | None:
-            logger = get_run_logger()
-
-            try:
-                async with httpx.AsyncClient() as http_client:
-                    result = await find_pdm(
-                        session,
-                        city,
-                        settings.max_pages_per_site,
-                        settings.max_depth,
-                        http_client,
-                        settings.pdm_output_dir,
-                        settings.min_pdf_pages,
-                        settings.min_pdm_keyword_hits,
-                        site_concurrency=settings.site_concurrency,
-                        request_delay_seconds=settings.site_request_delay_seconds,
-                        max_retries_on_403=settings.max_retries_on_403,
-                        retry_backoff_seconds=settings.retry_backoff_seconds,
-                    )
-            except SiteBlockedError as error:
-                logger.error(f"Giving up on {city.website}: {error}")
-                return None
-            except Exception:
-                logger.warning(f"Failed to crawl {city.website}", exc_info=True)
-                return None
-
-            if result is None:
-                logger.warning(f"No PDM found on {city.website}")
-
-            return result
-
-        async def crawl_with_limit(city: CityWebsite) -> PDMResult | None:
-            async with semaphore:
-                return await crawl_city(city)
-
-        with tqdm(total=len(cities), desc="Crawling cities for PDM", unit="city") as progress:
-            for coro in asyncio.as_completed([crawl_with_limit(city) for city in cities]):
-                result = await coro
-                if result is not None:
-                    pending_results.append(result)
-
-                if len(pending_results) >= city_concurrency:
-                    await flush()
-
-                progress.set_postfix(persisted=persisted)
-                progress.update(1)
-
-            if pending_results:
-                await flush()
-                progress.set_postfix(persisted=persisted)
-
-    logger.info(f"Resolved and persisted {persisted}/{len(cities)} PDMs in total")
-    return persisted
+    logger.info(f"Wrote {len(records)} PDM record(s) to {settings.output_file}")
 
 
 @flow(
     name="extract_pdms",
-    description="Crawl each city's town hall website in parallel to find and resolve its PDM (Plano Diretor Municipal) regulation PDF.",
+    description=(
+        "Resolve every municipality's PDM (Plano Diretor Municipal) via SNIT and extract "
+        "the text of each regulation PDF in its history."
+    ),
 )
-async def extract_pdms() -> int:
-    cities = await find_pending_cities()
-    return await crawl_cities_for_pdm(cities)
+async def extract_pdms() -> list[PDMRecord]:
+    """Fans out one Prefect task run per municipality via `.map()`, capped
+    at `settings.snit_concurrency` concurrently running task runs (see the
+    tag-based concurrency limit registered below). Each mapped call opens
+    its own AsyncStealthySession (see extract_pdms.tasks.ProcessMunicipio):
+    Prefect's task runner executes every mapped call on its own fresh event
+    loop in its own thread, so a session can't be shared *across* calls the
+    way it's shared across steps *within* one municipality's own pipeline
+    (see extract_pdms.services.MunicipioPipeline.process_municipio).
+
+    Idempotent and resumable, at the document level: search and fetch
+    always re-run for every municipality (they're cheap SNIT metadata
+    lookups), but `output_store` persists each regulation document's
+    download/text-extraction result -- via its own locked critical
+    section, see OutputStore.record -- to `settings.state_file` as soon
+    as it's produced, and a document already recorded there (regardless of
+    whether it succeeded) is reused on the next run instead of being
+    downloaded and parsed again. See
+    extract_pdms.services.MunicipioPipeline._extract_documents.
+    """
+    logger = get_run_logger()
+
+    output_store = OutputStore(settings.state_file)
+
+    municipalities = SnitSearch.load_municipalities()
+
+    await ensure_concurrency_limit(PROCESS_MUNICIPIO_TAG, settings.snit_concurrency)
+    await ensure_concurrency_limit(SEARCH_MUNICIPIO_TAG, settings.snit_concurrency)
+    await ensure_concurrency_limit(
+        FETCH_REGULATION_DOCUMENTS_TAG, settings.snit_concurrency
+    )
+    await ensure_concurrency_limit(
+        EXTRACT_PDF_TEXT_TAG, settings.pdf_download_concurrency
+    )
+
+    with tempfile.TemporaryDirectory(prefix="extract_pdms_") as tmp_dir_name:
+        tmp_dir = Path(tmp_dir_name)
+
+        futures = process_municipio_task.map(
+            municipalities,
+            unmapped(tmp_dir),
+            unmapped(settings.pdf_download_timeout_seconds),
+            unmapped(output_store),
+        )
+
+        with tqdm(
+            total=len(municipalities), desc="Processing municipalities", unit="city"
+        ) as progress:
+            for future in futures:
+                cast("None", future.result())
+                progress.update(1)
+
+    pdm_records = output_store.records
+
+    if "database" in settings.load_targets:
+        await persist_pdms_task(pdm_records)
+
+    if "json" in settings.load_targets:
+        await write_pdms_json_task(pdm_records)
+
+    return pdm_records
 
 
 if __name__ == "__main__":

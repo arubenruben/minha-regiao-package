@@ -1,0 +1,1587 @@
+[
+    {
+        "name": "CENTRO",
+        "listMunicipalities": [
+            {
+                "dtcc": "0101",
+                "designation": "ÁGUEDA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0901",
+                "designation": "AGUIAR DA BEIRA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0102",
+                "designation": "ALBERGARIA-A-VELHA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0902",
+                "designation": "ALMEIDA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1002",
+                "designation": "ALVAIÁZERE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0103",
+                "designation": "ANADIA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1003",
+                "designation": "ANSIÃO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0601",
+                "designation": "ARGANIL",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0105",
+                "designation": "AVEIRO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1004",
+                "designation": "BATALHA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0501",
+                "designation": "BELMONTE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0602",
+                "designation": "CANTANHEDE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1802",
+                "designation": "CARREGAL DO SAL",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1007",
+                "designation": "CASTANHEIRA DE PÊRA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0502",
+                "designation": "CASTELO BRANCO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1803",
+                "designation": "CASTRO DAIRE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0903",
+                "designation": "CELORICO DA BEIRA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0603",
+                "designation": "COIMBRA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0604",
+                "designation": "CONDEIXA-A-NOVA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0503",
+                "designation": "COVILHÃ",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0108",
+                "designation": "ESTARREJA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0605",
+                "designation": "FIGUEIRA DA FOZ",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0904",
+                "designation": "FIGUEIRA DE CASTELO RODRIGO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1008",
+                "designation": "FIGUEIRÓ DOS VINHOS",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0905",
+                "designation": "FORNOS DE ALGODRES",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0504",
+                "designation": "FUNDÃO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0606",
+                "designation": "GÓIS",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0906",
+                "designation": "GOUVEIA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0907",
+                "designation": "GUARDA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0505",
+                "designation": "IDANHA-A-NOVA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0110",
+                "designation": "ÍLHAVO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1009",
+                "designation": "LEIRIA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0607",
+                "designation": "LOUSÃ",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1806",
+                "designation": "MANGUALDE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0908",
+                "designation": "MANTEIGAS",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1010",
+                "designation": "MARINHA GRANDE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0111",
+                "designation": "MEALHADA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0909",
+                "designation": "MÊDA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0608",
+                "designation": "MIRA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0609",
+                "designation": "MIRANDA DO CORVO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0610",
+                "designation": "MONTEMOR-O-VELHO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1808",
+                "designation": "MORTÁGUA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0112",
+                "designation": "MURTOSA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1809",
+                "designation": "NELAS",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0506",
+                "designation": "OLEIROS",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1810",
+                "designation": "OLIVEIRA DE FRADES",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0114",
+                "designation": "OLIVEIRA DO BAIRRO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0611",
+                "designation": "OLIVEIRA DO HOSPITAL",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0115",
+                "designation": "OVAR",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0612",
+                "designation": "PAMPILHOSA DA SERRA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1013",
+                "designation": "PEDRÓGÃO GRANDE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0613",
+                "designation": "PENACOVA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1811",
+                "designation": "PENALVA DO CASTELO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0507",
+                "designation": "PENAMACOR",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0614",
+                "designation": "PENELA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0910",
+                "designation": "PINHEL",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1015",
+                "designation": "POMBAL",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1016",
+                "designation": "PORTO DE MÓS",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0508",
+                "designation": "PROENÇA-A-NOVA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0911",
+                "designation": "SABUGAL",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1814",
+                "designation": "SANTA COMBA DÃO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1816",
+                "designation": "SÃO PEDRO DO SUL",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1817",
+                "designation": "SÁTÃO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0912",
+                "designation": "SEIA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0509",
+                "designation": "SERTÃ",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0117",
+                "designation": "SEVER DO VOUGA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0615",
+                "designation": "SOURE",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0616",
+                "designation": "TÁBUA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1821",
+                "designation": "TONDELA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0913",
+                "designation": "TRANCOSO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0118",
+                "designation": "VAGOS",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0510",
+                "designation": "VILA DE REI",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1822",
+                "designation": "VILA NOVA DE PAIVA",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0617",
+                "designation": "VILA NOVA DE POIARES",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "0511",
+                "designation": "VILA VELHA DE RÓDÃO",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1823",
+                "designation": "VISEU",
+                "region": "CENTRO"
+            },
+            {
+                "dtcc": "1824",
+                "designation": "VOUZELA",
+                "region": "CENTRO"
+            }
+        ]
+    },
+    {
+        "name": "NORTE",
+        "listMunicipalities": [
+            {
+                "dtcc": "0401",
+                "designation": "ALFÂNDEGA DA FÉ",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1701",
+                "designation": "ALIJÓ",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1301",
+                "designation": "AMARANTE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0301",
+                "designation": "AMARES",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1601",
+                "designation": "ARCOS DE VALDEVEZ",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1801",
+                "designation": "ARMAMAR",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0104",
+                "designation": "AROUCA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1302",
+                "designation": "BAIÃO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0302",
+                "designation": "BARCELOS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1702",
+                "designation": "BOTICAS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0303",
+                "designation": "BRAGA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0402",
+                "designation": "BRAGANÇA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0304",
+                "designation": "CABECEIRAS DE BASTO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1602",
+                "designation": "CAMINHA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0403",
+                "designation": "CARRAZEDA DE ANSIÃES",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0106",
+                "designation": "CASTELO DE PAIVA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0305",
+                "designation": "CELORICO DE BASTO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1703",
+                "designation": "CHAVES",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1804",
+                "designation": "CINFÃES",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0107",
+                "designation": "ESPINHO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0306",
+                "designation": "ESPOSENDE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0307",
+                "designation": "FAFE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1303",
+                "designation": "FELGUEIRAS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0404",
+                "designation": "FREIXO DE ESPADA À CINTA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1304",
+                "designation": "GONDOMAR",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0308",
+                "designation": "GUIMARÃES",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1805",
+                "designation": "LAMEGO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1305",
+                "designation": "LOUSADA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0405",
+                "designation": "MACEDO DE CAVALEIROS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1306",
+                "designation": "MAIA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1307",
+                "designation": "MARCO DE CANAVESES",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1308",
+                "designation": "MATOSINHOS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1603",
+                "designation": "MELGAÇO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1704",
+                "designation": "MESÃO FRIO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0406",
+                "designation": "MIRANDA DO DOURO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0407",
+                "designation": "MIRANDELA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0408",
+                "designation": "MOGADOURO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1807",
+                "designation": "MOIMENTA DA BEIRA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1604",
+                "designation": "MONÇÃO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1705",
+                "designation": "MONDIM DE BASTO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1706",
+                "designation": "MONTALEGRE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1707",
+                "designation": "MURÇA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0113",
+                "designation": "OLIVEIRA DE AZEMÉIS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1309",
+                "designation": "PAÇOS DE FERREIRA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1310",
+                "designation": "PAREDES",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1605",
+                "designation": "PAREDES DE COURA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1311",
+                "designation": "PENAFIEL",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1812",
+                "designation": "PENEDONO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1708",
+                "designation": "PESO DA RÉGUA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1606",
+                "designation": "PONTE DA BARCA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1607",
+                "designation": "PONTE DE LIMA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1312",
+                "designation": "PORTO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0309",
+                "designation": "PÓVOA DE LANHOSO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1313",
+                "designation": "PÓVOA DE VARZIM",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1813",
+                "designation": "RESENDE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1709",
+                "designation": "RIBEIRA DE PENA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1710",
+                "designation": "SABROSA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0109",
+                "designation": "SANTA MARIA DA FEIRA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1711",
+                "designation": "SANTA MARTA DE PENAGUIÃO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1314",
+                "designation": "SANTO TIRSO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0116",
+                "designation": "SÃO JOÃO DA MADEIRA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1815",
+                "designation": "SÃO JOÃO DA PESQUEIRA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1818",
+                "designation": "SERNANCELHE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1819",
+                "designation": "TABUAÇO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1820",
+                "designation": "TAROUCA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0310",
+                "designation": "TERRAS DE BOURO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0409",
+                "designation": "TORRE DE MONCORVO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1318",
+                "designation": "TROFA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0119",
+                "designation": "VALE DE CAMBRA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1608",
+                "designation": "VALENÇA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1315",
+                "designation": "VALONGO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1712",
+                "designation": "VALPAÇOS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1609",
+                "designation": "VIANA DO CASTELO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0311",
+                "designation": "VIEIRA DO MINHO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1316",
+                "designation": "VILA DO CONDE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0410",
+                "designation": "VILA FLOR",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1610",
+                "designation": "VILA NOVA DE CERVEIRA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0312",
+                "designation": "VILA NOVA DE FAMALICÃO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0914",
+                "designation": "VILA NOVA DE FOZ CÔA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1317",
+                "designation": "VILA NOVA DE GAIA",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1713",
+                "designation": "VILA POUCA DE AGUIAR",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "1714",
+                "designation": "VILA REAL",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0313",
+                "designation": "VILA VERDE",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0411",
+                "designation": "VIMIOSO",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0412",
+                "designation": "VINHAIS",
+                "region": "NORTE"
+            },
+            {
+                "dtcc": "0314",
+                "designation": "VIZELA",
+                "region": "NORTE"
+            }
+        ]
+    },
+    {
+        "name": "ALENTEJO",
+        "listMunicipalities": [
+            {
+                "dtcc": "0701",
+                "designation": "ALANDROAL",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1501",
+                "designation": "ALCÁCER DO SAL",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0201",
+                "designation": "ALJUSTREL",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0202",
+                "designation": "ALMODÔVAR",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1201",
+                "designation": "ALTER DO CHÃO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0203",
+                "designation": "ALVITO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0702",
+                "designation": "ARRAIOLOS",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1202",
+                "designation": "ARRONCHES",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1203",
+                "designation": "AVIS",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0204",
+                "designation": "BARRANCOS",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0205",
+                "designation": "BEJA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0703",
+                "designation": "BORBA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1204",
+                "designation": "CAMPO MAIOR",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1205",
+                "designation": "CASTELO DE VIDE",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0206",
+                "designation": "CASTRO VERDE",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1206",
+                "designation": "CRATO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0207",
+                "designation": "CUBA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1207",
+                "designation": "ELVAS",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0704",
+                "designation": "ESTREMOZ",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0705",
+                "designation": "ÉVORA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0208",
+                "designation": "FERREIRA DO ALENTEJO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1208",
+                "designation": "FRONTEIRA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1209",
+                "designation": "GAVIÃO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1505",
+                "designation": "GRÂNDOLA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1210",
+                "designation": "MARVÃO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0209",
+                "designation": "MÉRTOLA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1211",
+                "designation": "MONFORTE",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0706",
+                "designation": "MONTEMOR-O-NOVO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0707",
+                "designation": "MORA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0210",
+                "designation": "MOURA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0708",
+                "designation": "MOURÃO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1212",
+                "designation": "NISA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0211",
+                "designation": "ODEMIRA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0212",
+                "designation": "OURIQUE",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1213",
+                "designation": "PONTE DE SOR",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1214",
+                "designation": "PORTALEGRE",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0709",
+                "designation": "PORTEL",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0710",
+                "designation": "REDONDO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0711",
+                "designation": "REGUENGOS DE MONSARAZ",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1509",
+                "designation": "SANTIAGO DO CACÉM",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0213",
+                "designation": "SERPA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1513",
+                "designation": "SINES",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "1215",
+                "designation": "SOUSEL",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0712",
+                "designation": "VENDAS NOVAS",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0713",
+                "designation": "VIANA DO ALENTEJO",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0214",
+                "designation": "VIDIGUEIRA",
+                "region": "ALENTEJO"
+            },
+            {
+                "dtcc": "0714",
+                "designation": "VILA VIÇOSA",
+                "region": "ALENTEJO"
+            }
+        ]
+    },
+    {
+        "name": "ALGARVE",
+        "listMunicipalities": [
+            {
+                "dtcc": "0801",
+                "designation": "ALBUFEIRA",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0802",
+                "designation": "ALCOUTIM",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0803",
+                "designation": "ALJEZUR",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0804",
+                "designation": "CASTRO MARIM",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0805",
+                "designation": "FARO",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0806",
+                "designation": "LAGOA",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0807",
+                "designation": "LAGOS",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0808",
+                "designation": "LOULÉ",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0809",
+                "designation": "MONCHIQUE",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0810",
+                "designation": "OLHÃO",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0811",
+                "designation": "PORTIMÃO",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0812",
+                "designation": "SÃO BRÁS DE ALPORTEL",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0813",
+                "designation": "SILVES",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0814",
+                "designation": "TAVIRA",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0815",
+                "designation": "VILA DO BISPO",
+                "region": "ALGARVE"
+            },
+            {
+                "dtcc": "0816",
+                "designation": "VILA REAL DE SANTO ANTÓNIO",
+                "region": "ALGARVE"
+            }
+        ]
+    },
+    {
+        "name": "LISBOA E VALE DO TEJO",
+        "listMunicipalities": [
+            {
+                "dtcc": "1401",
+                "designation": "ABRANTES",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1402",
+                "designation": "ALCANENA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1001",
+                "designation": "ALCOBAÇA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1502",
+                "designation": "ALCOCHETE",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1101",
+                "designation": "ALENQUER",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1503",
+                "designation": "ALMADA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1403",
+                "designation": "ALMEIRIM",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1404",
+                "designation": "ALPIARÇA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1115",
+                "designation": "AMADORA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1102",
+                "designation": "ARRUDA DOS VINHOS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1103",
+                "designation": "AZAMBUJA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1504",
+                "designation": "BARREIRO",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1405",
+                "designation": "BENAVENTE",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1005",
+                "designation": "BOMBARRAL",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1104",
+                "designation": "CADAVAL",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1006",
+                "designation": "CALDAS DA RAINHA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1406",
+                "designation": "CARTAXO",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1105",
+                "designation": "CASCAIS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1407",
+                "designation": "CHAMUSCA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1408",
+                "designation": "CONSTÂNCIA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1409",
+                "designation": "CORUCHE",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1410",
+                "designation": "ENTRONCAMENTO",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1411",
+                "designation": "FERREIRA DO ZÊZERE",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1412",
+                "designation": "GOLEGÃ",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1106",
+                "designation": "LISBOA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1107",
+                "designation": "LOURES",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1108",
+                "designation": "LOURINHÃ",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1413",
+                "designation": "MAÇÃO",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1109",
+                "designation": "MAFRA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1506",
+                "designation": "MOITA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1507",
+                "designation": "MONTIJO",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1011",
+                "designation": "NAZARÉ",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1012",
+                "designation": "ÓBIDOS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1116",
+                "designation": "ODIVELAS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1110",
+                "designation": "OEIRAS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1421",
+                "designation": "OURÉM",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1508",
+                "designation": "PALMELA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1014",
+                "designation": "PENICHE",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1414",
+                "designation": "RIO MAIOR",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1415",
+                "designation": "SALVATERRA DE MAGOS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1416",
+                "designation": "SANTARÉM",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1417",
+                "designation": "SARDOAL",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1510",
+                "designation": "SEIXAL",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1511",
+                "designation": "SESIMBRA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1512",
+                "designation": "SETÚBAL",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1111",
+                "designation": "SINTRA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1112",
+                "designation": "SOBRAL DE MONTE AGRAÇO",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1418",
+                "designation": "TOMAR",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1419",
+                "designation": "TORRES NOVAS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1113",
+                "designation": "TORRES VEDRAS",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1114",
+                "designation": "VILA FRANCA DE XIRA",
+                "region": "LISBOA E VALE DO TEJO"
+            },
+            {
+                "dtcc": "1420",
+                "designation": "VILA NOVA DA BARQUINHA",
+                "region": "LISBOA E VALE DO TEJO"
+            }
+        ]
+    },
+    {
+        "name": "REGIÃO AUTÓNOMA DA MADEIRA",
+        "listMunicipalities": [
+            {
+                "dtcc": "3101",
+                "designation": "CALHETA",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3102",
+                "designation": "CÂMARA DE LOBOS",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3103",
+                "designation": "FUNCHAL",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3104",
+                "designation": "MACHICO",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3105",
+                "designation": "PONTA DO SOL",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3106",
+                "designation": "PORTO MONIZ",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3201",
+                "designation": "PORTO SANTO",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3107",
+                "designation": "RIBEIRA BRAVA",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3108",
+                "designation": "SANTA CRUZ",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3109",
+                "designation": "SANTANA",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            },
+            {
+                "dtcc": "3110",
+                "designation": "SÃO VICENTE",
+                "region": "REGIÃO AUTÓNOMA DA MADEIRA"
+            }
+        ]
+    },
+    {
+        "name": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL",
+        "listMunicipalities": [
+            {
+                "dtcc": "4201",
+                "designation": "LAGOA",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL"
+            },
+            {
+                "dtcc": "4202",
+                "designation": "NORDESTE",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL"
+            },
+            {
+                "dtcc": "4203",
+                "designation": "PONTA DELGADA",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL"
+            },
+            {
+                "dtcc": "4204",
+                "designation": "POVOAÇÃO",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL"
+            },
+            {
+                "dtcc": "4205",
+                "designation": "RIBEIRA GRANDE",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL"
+            },
+            {
+                "dtcc": "4101",
+                "designation": "VILA DO PORTO",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL"
+            },
+            {
+                "dtcc": "4206",
+                "designation": "VILA FRANCA DO CAMPO",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO ORIENTAL"
+            }
+        ]
+    },
+    {
+        "name": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL",
+        "listMunicipalities": [
+            {
+                "dtcc": "4301",
+                "designation": "ANGRA DO HEROÍSMO",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4501",
+                "designation": "CALHETA",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4701",
+                "designation": "HORTA",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4601",
+                "designation": "LAJES DO PICO",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4602",
+                "designation": "MADALENA",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4302",
+                "designation": "PRAIA DA VITÓRIA",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4401",
+                "designation": "SANTA CRUZ DA GRACIOSA",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4603",
+                "designation": "SÃO ROQUE DO PICO",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            },
+            {
+                "dtcc": "4502",
+                "designation": "VELAS",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO CENTRAL"
+            }
+        ]
+    },
+    {
+        "name": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO OCIDENTAL",
+        "listMunicipalities": [
+            {
+                "dtcc": "4901",
+                "designation": "CORVO",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO OCIDENTAL"
+            },
+            {
+                "dtcc": "4801",
+                "designation": "LAJES DAS FLORES",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO OCIDENTAL"
+            },
+            {
+                "dtcc": "4802",
+                "designation": "SANTA CRUZ DAS FLORES",
+                "region": "REGIÃO AUTÓNOMA DOS AÇORES - GRUPO OCIDENTAL"
+            }
+        ]
+    }
+]

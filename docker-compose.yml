@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: minha_regiao
+      POSTGRES_PASSWORD: minha_regiao
+      POSTGRES_DB: minha_regiao
+    # Host port Postgres is reachable on -- set POSTGRES_PORT (e.g. in a
+    # root .env) if 5432 is already taken by a local Postgres install.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - minha_regiao_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minha_regiao"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  minha_regiao_db:

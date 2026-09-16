@@ -4,10 +4,12 @@ from prefect import flow, task, get_run_logger
 
 from extract_geo.Settings import settings as geo_settings
 from extract_geo.schema.DistrictReference import DistrictReference
-from extract_geo.services.DatasetPublisher import DatasetPublisher
 from extract_geo.services.DatasetRepo import ensure_dataset_repo
 from extract_geo.services.DistrictReferenceLoader import load_district_references
 from extract_geo.sub_flows.extract_districts.Settings import settings
+from minha_regiao.loader.DatabaseLoader import DatabaseLoader
+from minha_regiao.loader.HuggingFaceLoader import HuggingFaceLoader
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 from extract_geo.sub_flows.extract_districts.schema.DistrictDatasetRecord import (
     DistrictDatasetRecord,
 )
@@ -32,10 +34,11 @@ def load_references() -> list[DistrictReference]:
 def persist(references: list[DistrictReference]) -> int:
     logger = get_run_logger()
 
-    persisted = asyncio.run(persist_districts(geo_settings.database_url, references))
+    loader = DatabaseLoader[DistrictReference](lambda refs: persist_districts(geo_settings.database_url, refs))
+    asyncio.run(loader.load(references))
 
-    logger.info(f"Persisted {persisted} districts")
-    return persisted
+    logger.info(f"Persisted {len(references)} districts")
+    return len(references)
 
 
 @task(name="assign_city_districts")
@@ -75,9 +78,19 @@ def build_district_dataset_records(
 
 @task(name="publish_district_dataset")
 def publish_district_dataset(repo_id: str, records: list[DistrictDatasetRecord]) -> None:
-    DatasetPublisher[DistrictDatasetRecord](
+    loader = HuggingFaceLoader[DistrictDatasetRecord](
         repo_id, geo_settings.hf_api_key, settings.district_dataset_config_name
-    ).publish(records)
+    )
+    asyncio.run(loader.load(records))
+
+
+@task(name="write_district_dataset_json")
+def write_district_dataset_json(records: list[DistrictDatasetRecord]) -> None:
+    logger = get_run_logger()
+
+    asyncio.run(JsonFileLoader[DistrictDatasetRecord](settings.output_file).load(records))
+
+    logger.info(f"Wrote {len(records)} district dataset records to {settings.output_file}")
 
 
 @flow(
@@ -87,13 +100,24 @@ def publish_district_dataset(repo_id: str, records: list[DistrictDatasetRecord])
 )
 def extract_districts(geo_dataset_repo_id: str = geo_settings.geo_dataset_repo_id) -> int:
     references = load_references()
-    persist(references)
+
+    if "database" in settings.load_targets:
+        persist(references)
+
+    # Assigning cities to districts is a required cross-referencing step,
+    # not a "load" in the Loader sense -- it always runs.
     updated = assign(references)
 
-    # TODO: wikipedia enrichment (fetch_wikipedia_urls) is not wired into the pipeline yet
-    records = build_district_dataset_records(references, {})
-    ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
-    publish_district_dataset(geo_dataset_repo_id, records)
+    if "huggingface" in settings.load_targets or "json" in settings.load_targets:
+        # TODO: wikipedia enrichment (fetch_wikipedia_urls) is not wired into the pipeline yet
+        records = build_district_dataset_records(references, {})
+
+        if "huggingface" in settings.load_targets:
+            ensure_dataset_repo(geo_settings.hf_api_key, geo_dataset_repo_id)
+            publish_district_dataset(geo_dataset_repo_id, records)
+
+        if "json" in settings.load_targets:
+            write_district_dataset_json(records)
 
     return updated
 

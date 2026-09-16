@@ -61,3 +61,85 @@ Read `crawl_cities_for_pdm` there before implementing this in a new flow.
   object via closure (see `crawl_city` in `ExtractPDM.py`) — or, if a task
   genuinely can't avoid taking one as an argument, set `persist_result=False`
   on it rather than importing `prefect.cache_policies.NO_CACHE`.
+
+## Composable `Loader` abstraction for every flow's output step
+
+Any flow's final "write the results somewhere" step (database persistence, a
+local JSON file, a Hugging Face dataset publish, ...) MUST be expressed as one
+or more `Loader`s from the shared `minha_regiao.loader` package, selected at
+runtime by a `load_targets` setting — not a hardcoded, unconditional call to a
+publish/persist function in the flow body.
+
+Reference implementations: [`minha_regiao/src/minha_regiao/loader/`](../minha_regiao/src/minha_regiao/loader/)
+(`Loader.py`, `DatabaseLoader.py`, `JsonFileLoader.py`, `HuggingFaceLoader.py`)
+and their wiring into [`extract_pdms/src/extract_pdms/ExtractPDM.py`](extract_pdms/src/extract_pdms/ExtractPDM.py)
+(additive: this flow has no database persistence otherwise) and
+[`extract_rmues/src/extract_rmues/ExtractRMUEs.py`](extract_rmues/src/extract_rmues/ExtractRMUEs.py)
+(existing database sink rewired, plus an opt-in JSON dry-run target).
+
+### The pattern
+
+1. **`Loader` is a minimal `Protocol`**, generic over a pydantic record type,
+   with one method: `async def load(self, records: list[RecordT]) -> None`.
+   It is deliberately not a generic ORM mapper.
+
+2. **Each sink is a thin adapter, not new business logic**:
+   - `DatabaseLoader` wraps a flow's own, already-existing repository
+     function (e.g. `CityRepository.persist_cities`,
+     `DistrictRepository.persist_districts`, `ParishRepository.persist_parishes`,
+     `RMURepository.persist_rmue_regulations`, `PDMRepository.persist_pdms`) —
+     the entity-specific `update_or_create` mapping stays in that function.
+   - `JsonFileLoader` writes `[r.model_dump(mode="json") for r in records]` to
+     a `Path`, atomically (write-then-replace with retry-on-`PermissionError`,
+     the same mechanics proven in `extract_pdms.services.OutputStore`).
+   - `HuggingFaceLoader` wraps `datasets.Dataset.push_to_hub` — this is the
+     canonical home for what used to be `extract_geo.services.DatasetPublisher`
+     (kept as a re-export for backward compatibility).
+
+3. **`load_targets` is a `pydantic BaseSettings` field on the flow's (or
+   sub-flow's) own `Settings.py`**, typed as `list[Literal[...]]` over the
+   sink names that flow supports, e.g.:
+
+   ```python
+   load_targets: list[Literal["database", "json"]] = ["json"]
+   ```
+
+   **`"json"` MUST be a valid target for every flow, and MUST be the
+   default** (`load_targets` defaults to `["json"]` alone, not combined with
+   `"database"`/`"huggingface"`). This is what makes every flow reproducible
+   out of the box, with no database or external credentials required —
+   `database`/`huggingface` are opt-in additions on top of that, never the
+   default.
+
+4. **Dispatch to each configured loader as its own Prefect task**, so one
+   sink failing (e.g. disk full for the JSON write) doesn't hide a DB write
+   failure or vice versa, and each gets its own retry behavior:
+
+   ```python
+   if "database" in settings.load_targets:
+       await persist_my_records_task(records)
+   if "json" in settings.load_targets:
+       await write_my_records_json_task(records)
+   ```
+
+### Also required
+
+- A step that's a required part of the pipeline's own logic — not a sink for
+  its results — stays unconditional. For example `extract_districts`'
+  `assign_city_districts` (assigning cities to districts) and
+  `extract_parishes`' `load_cities_task` (reading cities as required input)
+  are never gated by `load_targets`.
+- A flow whose sinks fan out to *different* derived record shapes (e.g.
+  `extract_cities` persists `CityContacts` to the database but publishes
+  `CityDatasetRecord` to Hugging Face) gates each sink independently by its
+  own `load_targets` membership check — it is not one shared record list fed
+  to every loader. When `"json"` and `"huggingface"` both need the same
+  derived shape (as in `extract_cities`/`extract_districts`/`extract_parishes`),
+  build that shape once behind `"huggingface" in load_targets or "json" in
+  load_targets`, then gate the publish call and the JSON write independently
+  inside that block — don't build it twice.
+- An unimplemented flow (see `parse_election_files`'s stub sub-flows) still
+  gets the `load_targets` setting scaffolded on its `Settings.py` ahead of its
+  parsing logic, so whoever implements it wires the output step onto
+  `minha_regiao.loader` from day one instead of inventing another one-off
+  publish call.

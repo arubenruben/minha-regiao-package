@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minha_regiao_cli"
+version = "0.1.0"
+description = "CLI entrypoint for running minha-regiao's Prefect flows without memorizing each package's module path"
+requires-python = ">=3.12"
+
+dependencies = [
+    "minha_regiao",
+    "extract_geo",
+    "extract_pdms",
+    "extract_rmues",
+    "extract_election_files",
+    "parse_election_files",
+    "typer>=0.15.1",
+]
+
+[project.scripts]
+minha-regiao = "minha_regiao_cli.main:app"
+
+[tool.uv.sources]
+minha_regiao = { workspace = true }
+extract_geo = { workspace = true }
+extract_pdms = { workspace = true }
+extract_rmues = { workspace = true }
+extract_election_files = { workspace = true }
+parse_election_files = { workspace = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false

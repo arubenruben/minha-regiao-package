@@ -20,6 +20,7 @@ members = [
     "extract-pdms",
     "extract-rmues",
     "minha-regiao",
+    "minha-regiao-cli",
     "parse-election-files",
 ]
 
@@ -884,18 +885,18 @@ name = "extract-pdms"
 version = "0.1.0"
 source = { editable = "flows/extract_pdms" }
 dependencies = [
+    { name = "httpx" },
     { name = "minha-regiao" },
     { name = "prefect", extra = ["docker"] },
-    { name = "pypdf" },
     { name = "scrapling", extra = ["fetchers"] },
     { name = "tqdm" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "minha-regiao", editable = "minha_regiao" },
     { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
-    { name = "pypdf", specifier = ">=6.14.2" },
     { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
     { name = "tqdm", specifier = ">=4.68.4" },
 ]
@@ -905,6 +906,7 @@ name = "extract-rmues"
 version = "0.1.0"
 source = { editable = "flows/extract_rmues" }
 dependencies = [
+    { name = "httpx" },
     { name = "minha-regiao" },
     { name = "prefect", extra = ["docker"] },
     { name = "scrapling", extra = ["fetchers"] },
@@ -912,6 +914,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "minha-regiao", editable = "minha_regiao" },
     { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
     { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
@@ -1855,21 +1858,52 @@ version = "0.1.0"
 source = { editable = "minha_regiao" }
 dependencies = [
     { name = "alembic" },
+    { name = "datasets" },
     { name = "httpx" },
+    { name = "huggingface-hub" },
     { name = "levenshtein" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pypdf" },
     { name = "tortoise-orm", extra = ["asyncpg"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.5" },
+    { name = "datasets", specifier = ">=5.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "huggingface-hub", specifier = ">=1.23.0" },
     { name = "levenshtein", specifier = ">=0.27.3" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "pypdf", specifier = ">=6.14.2" },
     { name = "tortoise-orm", extras = ["asyncpg"], specifier = ">=1.1.7" },
+]
+
+[[package]]
+name = "minha-regiao-cli"
+version = "0.1.0"
+source = { editable = "cli" }
+dependencies = [
+    { name = "extract-election-files" },
+    { name = "extract-geo" },
+    { name = "extract-pdms" },
+    { name = "extract-rmues" },
+    { name = "minha-regiao" },
+    { name = "parse-election-files" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "extract-election-files", editable = "flows/extract_election_files" },
+    { name = "extract-geo", editable = "flows/extract_geo" },
+    { name = "extract-pdms", editable = "flows/extract_pdms" },
+    { name = "extract-rmues", editable = "flows/extract_rmues" },
+    { name = "minha-regiao", editable = "minha_regiao" },
+    { name = "parse-election-files", editable = "flows/parse_election_files" },
+    { name = "typer", specifier = ">=0.15.1" },
 ]
 
 [[package]]
@@ -2310,8 +2344,8 @@ name = "pendulum"
 version = "3.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "python-dateutil" },
-    { name = "tzdata" },
+    { name = "python-dateutil", marker = "python_full_version < '3.13'" },
+    { name = "tzdata", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cb/72/9a51afa0a822b09e286c4cb827ed7b00bc818dac7bd11a5f161e493a217d/pendulum-3.2.0.tar.gz", hash = "sha256:e80feda2d10fa3ff8b1526715f7d33dcb7e08494b3088f2c8a3ac92d4a4331ce", size = 86912, upload-time = "2026-01-30T11:22:24.093Z" }
 wheels = [
@@ -3808,8 +3842,8 @@ name = "whenever"
 version = "0.10.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "tzdata", marker = "sys_platform == 'win32'" },
-    { name = "tzlocal", marker = "sys_platform != 'darwin' and sys_platform != 'linux'" },
+    { name = "tzdata", marker = "python_full_version >= '3.13' and sys_platform == 'win32'" },
+    { name = "tzlocal", marker = "python_full_version >= '3.13' and sys_platform != 'darwin' and sys_platform != 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d2/09/9ec61cfa69047a75af61e8db53e7782ed5b3995bc8a08132b951202c8aaf/whenever-0.10.5.tar.gz", hash = "sha256:bc8fd6208d50be50e490a3628fa6346d006b02df5de64c43170df8a809ded8d4", size = 437531, upload-time = "2026-08-07T15:03:30.933Z" }
 wheels = [

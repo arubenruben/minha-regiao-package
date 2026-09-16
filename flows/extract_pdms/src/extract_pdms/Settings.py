@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,40 +11,44 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
+    # How many municipalities are processed in parallel. Each municipality
+    # is mapped to its own task run with its own AsyncStealthySession (a
+    # session can't be shared across mapped calls -- each runs on its own
+    # fresh event loop), so this also bounds how many browsers are open
+    # concurrently.
+    snit_concurrency: int = 4
 
-    max_pages_per_site: int = 5_000
-    max_depth: int = 4
+    # SNIT's portal occasionally serves a broken/anti-bot response (e.g. an
+    # error page with no CSRF token) under load -- transient, so the search
+    # and regulamento-lookup tasks retry rather than treating it as "this
+    # municipality has no PDM". Delay is exponential (attempt N waits
+    # snit_retry_delay_seconds * 2**(N-1)) with jitter, rather than a flat
+    # delay, so repeated retries space out instead of hammering the portal
+    # again right as it's rate-limiting/anti-bot-blocking.
+    snit_task_retries: int = 3
+    snit_retry_delay_seconds: float = 5.0
+    snit_retry_jitter_factor: float = 1.0
 
-    # How many cities (distinct domains) to crawl at once. Safe to raise
-    # since each domain is rate-limited independently of the others.
-    city_concurrency: int = 8
+    # How many regulation PDFs can be downloaded/parsed concurrently.
+    pdf_download_concurrency: int = 8
+    pdf_download_timeout_seconds: float = 60.0
 
-    # How many pages to fetch concurrently within a single site's crawl.
-    # Left at 1 (fully sequential) by default since hitting one domain with
-    # concurrent requests is what triggers rate limiting/403s in the first
-    # place; raise deliberately, per site, once a site is known to tolerate it.
-    site_concurrency: int = 1
+    # Where the enriched PDM records (with extracted regulation text) are
+    # written as JSON.
+    output_file: Path = Path(__file__).with_name("out") / "pdms.json"
 
-    # Minimum delay before each request to a given site, to avoid tripping
-    # rate limits.
-    site_request_delay_seconds: float = 1.0
+    # OutputStore's resumable ExtractionState, checkpointed per-document as
+    # the run progresses. Deliberately separate from output_file: that path
+    # is overwritten with a plain JSON list (see JsonFileLoader) once the
+    # run finishes, which isn't the shape OutputStore reads back on resume.
+    state_file: Path = Path(__file__).with_name("out") / "state.json"
 
-    # A 403 is treated as rate limiting rather than a hard failure: retried
-    # with exponential backoff (retry_backoff_seconds * 2**attempt) instead
-    # of being given up on immediately.
-    max_retries_on_403: int = 3
-    retry_backoff_seconds: float = 5.0
+    database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
-    # Where downloaded PDM candidates are saved, one subfolder per city.
-    pdm_output_dir: Path = Path(__file__).with_name("out")
-
-    # A downloaded candidate is only accepted as the PDM once it looks like
-    # one: municipal sites link plenty of other regulations that also match
-    # the URL/link-text rules, so this content-level check catches those
-    # false positives.
-    min_pdf_pages: int = 10
-    min_pdm_keyword_hits: int = 5
+    # Which sinks the flow writes its PDM records to at the end of the run.
+    # Defaults to JSON only, matching this flow's original (pre-Loader)
+    # behavior exactly -- extract_pdms has no database persistence today.
+    load_targets: list[Literal["database", "json"]] = ["json"]
 
 
 settings = Settings()
