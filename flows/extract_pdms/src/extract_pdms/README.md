@@ -18,6 +18,7 @@ extract_pdms/
     ConcurrencyLimiter.py         registers the flow's tag-based concurrency limit
   exception/                    typed exceptions for PDF url/page-action failures
   out/pdms.json                 default JSON output (see load_targets below)
+  out/state.json                OutputStore's resumable checkpoint (separate from pdms.json)
 ```
 
 Downloading/parsing a regulation PDF and narrowing it down to its own notice
@@ -47,6 +48,7 @@ Settings are pydantic-settings, loaded from `extract_pdms/.env` — copy
 | `PDF_DOWNLOAD_CONCURRENCY`       | `8`                                                          | regulation PDFs downloaded/parsed in parallel |
 | `PDF_DOWNLOAD_TIMEOUT_SECONDS`   | `60.0`                                                       |                                                |
 | `OUTPUT_FILE`                    | `extract_pdms/out/pdms.json`                                 | used when `json` is in `LOAD_TARGETS`         |
+| `STATE_FILE`                     | `extract_pdms/out/state.json`                                | `OutputStore`'s resumable checkpoint           |
 | `DATABASE_URL`                   | `postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao` | used when `database` is in `LOAD_TARGETS`     |
 | `LOAD_TARGETS`                   | `["json"]`                                                   | which sinks to write to — `database`, `json`, or both (see [flows/CLAUDE.md](../../../CLAUDE.md) for the `Loader` pattern) |
 

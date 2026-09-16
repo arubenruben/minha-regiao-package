@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # written as JSON.
     output_file: Path = Path(__file__).with_name("out") / "pdms.json"
 
+    # OutputStore's resumable ExtractionState, checkpointed per-document as
+    # the run progresses. Deliberately separate from output_file: that path
+    # is overwritten with a plain JSON list (see JsonFileLoader) once the
+    # run finishes, which isn't the shape OutputStore reads back on resume.
+    state_file: Path = Path(__file__).with_name("out") / "state.json"
+
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:9001/minha_regiao"
 
     # Which sinks the flow writes its PDM records to at the end of the run.

@@ -49,6 +49,7 @@ async def extract_rmues(base_url: str) -> int:
 
     if "database" in settings.load_targets:
         await persist_rmue_page_task(entries)
+
     if "json" in settings.load_targets:
         await write_rmue_page_json_task(entries)
 
@@ -86,9 +87,7 @@ async def extract_rmues(base_url: str) -> int:
 
     newly_resolved: list[PendingDocument] = []
 
-    with tqdm(
-        total=len(to_resolve), desc="Resolving PDF urls", unit="doc"
-    ) as progress:
+    with tqdm(total=len(to_resolve), desc="Resolving PDF urls", unit="doc") as progress:
         for future in futures:
             newly_resolved.append(cast("PendingDocument", future.result()))
             progress.update(1)

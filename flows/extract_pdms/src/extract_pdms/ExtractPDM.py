@@ -67,7 +67,7 @@ async def extract_pdms() -> list[PDMRecord]:
     always re-run for every municipality (they're cheap SNIT metadata
     lookups), but `output_store` persists each regulation document's
     download/text-extraction result -- via its own locked critical
-    section, see OutputStore.record -- to `settings.output_file` as soon
+    section, see OutputStore.record -- to `settings.state_file` as soon
     as it's produced, and a document already recorded there (regardless of
     whether it succeeded) is reused on the next run instead of being
     downloaded and parsed again. See
@@ -75,7 +75,7 @@ async def extract_pdms() -> list[PDMRecord]:
     """
     logger = get_run_logger()
 
-    output_store = OutputStore(settings.output_file)
+    output_store = OutputStore(settings.state_file)
 
     municipalities = SnitSearch.load_municipalities()
 
