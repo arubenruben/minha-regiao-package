@@ -9,6 +9,7 @@ from minha_regiao.gazette.RegulationStructure import (
     Subsection,
     Title,
 )
+from minha_regiao.gazette.StructureDeduplicator import deduplicate_structure
 
 _ROMAN = r"[IVXLCDM]+"
 
@@ -34,7 +35,11 @@ _SECCAO_RE = re.compile(rf"^\s*SEC[CÇ][AÃ]O\s+({_ROMAN})\s*\.?\s*$", re.IGNORE
 # consistently uses ("Artigo 1.º"); "o" is accepted too as a fallback for
 # PDFs where font substitution drops the real glyph. An optional "-A"-style
 # suffix covers articles inserted by later amendments (e.g. "Artigo 10.º-A").
-_ARTIGO_RE = re.compile(r"^\s*Artigo\s+(\d+)\.?\s*[ºo](-[A-Z])?\s*\.?\s*$", re.IGNORECASE)
+# PDF text extraction frequently leaves whitespace around that hyphen
+# ("Artigo 10.º -A", "Artigo 10.º - A"), so it's tolerated here; the suffix
+# letter is captured on its own (group 2) so the number can be rebuilt in
+# its canonical "10.º-A" form regardless of how the line was spaced/cased.
+_ARTIGO_RE = re.compile(r"^\s*Artigo\s+(\d+)\.?\s*[ºo](?:\s*-\s*([A-Z]))?\s*\.?\s*$", re.IGNORECASE)
 
 # A heuristic for "this line is body prose, not a heading" -- used to decide
 # whether the line right after a header is that header's own title/heading
@@ -138,6 +143,12 @@ def parse_structure(text: str) -> list[StructureNode]:
     the current Capítulo, ...), but never the levels *above* it -- modelled
     here as popping the open-container stack down to (and including) the
     re-entered level before attaching the new node.
+
+    The tree is deduplicated before it's returned (see
+    minha_regiao.gazette.StructureDeduplicator): an amendment aviso quotes
+    each article it changes and then republishes the consolidated regulation,
+    and this parser, having no notion of quotation, reads both copies as real
+    Artigos.
     """
     lines = text.splitlines()
 
@@ -189,7 +200,8 @@ def parse_structure(text: str) -> list[StructureNode]:
             flush()
             match = _ARTIGO_RE.match(line)
             assert match is not None
-            number, suffix = match.group(1), match.group(2) or ""
+            number, letter = match.group(1), match.group(2)
+            suffix = f"-{letter.upper()}" if letter else ""
             current = {"artigo": f"{number}.º{suffix}", "artigo_heading": None, "body": []}
             index += 1
             index, heading = _consume_heading(lines, index)
@@ -256,4 +268,4 @@ def parse_structure(text: str) -> list[StructureNode]:
         index += 1
 
     flush()
-    return roots
+    return deduplicate_structure(roots).structure
