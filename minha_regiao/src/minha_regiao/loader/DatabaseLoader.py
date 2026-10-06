@@ -7,7 +7,7 @@ RecordT = TypeVar("RecordT", bound=BaseModel)
 
 class DatabaseLoader(Generic[RecordT]):
     """Adapts an existing flow-specific `persist_*` repository function
-    (e.g. `CityRepository.persist_cities`, `RMURepository.persist_rmue_regulations`)
+    (e.g. `CityRepository.persist_cities`, `RMURepository.persist_regulation_results`)
     to the common `Loader` interface. It does NOT attempt to be a generic
     ORM mapper -- the injected `persist` callable keeps doing the
     entity-specific `update_or_create` mapping; this class only adapts its
