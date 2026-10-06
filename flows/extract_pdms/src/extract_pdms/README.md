@@ -17,7 +17,10 @@ extract_pdms/
                                     row per city, title/identifier/latest
                                     pdf_url) plus one PDMDocument row per
                                     regulation document (full history, each
-                                    with its own status/text/structure)
+                                    with its own status/text/structure);
+                                    also reads every PDMDocument back as a
+                                    RegulationDocument, keyed by url
+                                    (find_processed_documents)
     ConcurrencyLimiter.py         registers the flow's tag-based concurrency limit
   exception/                    typed exceptions for PDF url/page-action failures
   out/pdms.json                 default JSON output (see load_targets below)
@@ -75,8 +78,37 @@ uv run --package extract_pdms python -m extract_pdms.ExtractPDM
 uv run --package minha_regiao_cli minha-regiao run extract-pdms
 ```
 
-Idempotent and resumable at the document level: `OutputStore` records each
-regulation document's download/text-extraction result as soon as it's
-produced, and a document already recorded is reused on the next run
-instead of being re-downloaded and re-parsed — see the docstring on
-`extract_pdms()` in `ExtractPDM.py`.
+## Idempotence
+
+Idempotent and resumable at the document level (keyed by the document's
+`url`, whatever its `status`): downloading and parsing a regulation PDF is the
+expensive, failure-prone step, so it's skipped for any document that already
+has a result. SNIT search and fetch are cheap metadata lookups and always
+re-run. There are two sources for "already has a result", checked in this
+order — see the docstring on `extract_pdms()` in `ExtractPDM.py`:
+
+1. `OutputStore` (`services/OutputStore.py`) records each document's result in
+   `STATE_FILE` as soon as it's produced, whatever `load_targets` is.
+2. The database, only when `database` is in `LOAD_TARGETS`. At the start of
+   the run, `find_processed_documents_task` reads every `PDMDocument` row
+   back as a `RegulationDocument` (`status`, `text` and `structure`
+   included, the JSON column validated as `list[StructureNode]`), keyed by
+   `url`, and passes that `processed_by_url` dict to every `process_municipio_task`.
+   This is what saves the work when the state file is gone (another machine,
+   a fresh container, a deleted file): every document already in Postgres is
+   reused instead of re-downloaded. Without `database` in `LOAD_TARGETS` the
+   task returns `{}` and the database is never opened.
+
+A document found in either source is reused as-is, even if its `status` is a
+failure: it isn't attempted again. To retry one, remove its entry from
+`STATE_FILE` *and* delete its `PDMDocument` row (or, to retry everything, the
+whole `STATE_FILE` and the `pdm_document` rows).
+
+On the way out, a document that's in `processed_by_url` is **not** written
+again, even when this run reused it from `OutputStore`: each document reaches
+Postgres exactly once, on its first complete run. `persist_pdms` still
+upserts each city's `PDM` row (`title`/`identifier`/`source_url`/`pdf_url`),
+computed over *all* of the record's documents, but only writes a `PDMDocument`
+row for the ones not already in `processed_by_url`. As a consequence, a row
+already persisted isn't refreshed by later runs — fixing one means deleting
+its row so it's processed again.

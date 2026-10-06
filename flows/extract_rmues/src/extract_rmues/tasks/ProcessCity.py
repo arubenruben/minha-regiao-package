@@ -18,26 +18,40 @@ from extract_rmues.tasks.ResolvePdfUrl import resolve_pdf_url_task
 PROCESS_CITY_TAG = "rmue-city-pipeline"
 
 
+def _find_processed(
+    dre_url: str, output_store: OutputStore, processed_by_url: dict[str, RegulationDocument]
+) -> RegulationDocument | None:
+    """The `OutputStore` is looked up first, then `processed_by_url`."""
+    cached = output_store.get_document(dre_url)
+    return cached if cached is not None else processed_by_url.get(dre_url)
+
+
 async def _resolve_and_extract(
-    documents: list[RegulationDocument], output_store: OutputStore
+    documents: list[RegulationDocument],
+    output_store: OutputStore,
+    processed_by_url: dict[str, RegulationDocument],
 ) -> list[RegulationDocument]:
     """Resolves each document's PDF url and extracts its own notice
     text/structure, skipping any document already recorded in
-    `output_store` -- idempotence here is per document (by dre_url),
-    mirroring extract_pdms.services.MunicipioPipeline._extract_documents: a
+    `output_store` or, failing that, in `processed_by_url` (the documents
+    already persisted in the database, see
+    extract_rmues.services.RMURepository.find_processed_documents) --
+    idempotence here is per document (by dre_url), mirroring
+    extract_pdms.services.MunicipioPipeline._extract_documents: a
     document's PDF resolution + text extraction is the expensive,
     failure-prone step worth not repeating on a re-run, regardless of
     whether it previously succeeded or failed.
 
     Returns one RegulationDocument per entry in `documents`, in the same
-    order: the one recorded in `output_store` when there is one, otherwise
-    the freshly resolved/extracted result. A document whose PDF url
-    couldn't be resolved comes back with `status=PDF_URL_NOT_FOUND`.
+    order: the one recorded in `output_store` or `processed_by_url` when
+    there is one, otherwise the freshly resolved/extracted result. A
+    document whose PDF url couldn't be resolved comes back with
+    `status=PDF_URL_NOT_FOUND`.
     """
     already_processed = {
         document.dre_url: cached
         for document in documents
-        if (cached := output_store.get_document(document.dre_url)) is not None
+        if (cached := _find_processed(document.dre_url, output_store, processed_by_url)) is not None
     }
     to_resolve = [document for document in documents if document.dre_url not in already_processed]
 
@@ -70,7 +84,11 @@ async def _resolve_and_extract(
 
 
 @task(name="process_city", tags=[PROCESS_CITY_TAG], persist_result=False)
-async def process_city_task(entry: RMUERegulation, output_store: OutputStore) -> RMUERegulation:
+async def process_city_task(
+    entry: RMUERegulation,
+    output_store: OutputStore,
+    processed_by_url: dict[str, RegulationDocument],
+) -> RMUERegulation:
     """One municipality's full pipeline: resolves each of its documents'
     PDF urls, then extracts their own notice text and legal structure --
     mapped once per municipality (see extract_rmues.ExtractRMUEs), so this
@@ -87,13 +105,20 @@ async def process_city_task(entry: RMUERegulation, output_store: OutputStore) ->
     pdf_url/status/raw_text/structure -- there's nothing to merge with
     what `output_store` already has for it. It's recorded there (persisting
     it to disk immediately -- see OutputStore.record) before returning.
+
+    `processed_by_url` is the documents already persisted in the database
+    (see extract_rmues.tasks.FindProcessedDocuments), the same read-only dict
+    for every mapped call; the caller wraps it in `quote` so Prefect doesn't
+    walk its whole contents again for each task run.
     """
     logger = get_run_logger()
 
     resolved_entry = RMUERegulation(
         municipality=entry.municipality,
-        urbanization_documents=await _resolve_and_extract(entry.urbanization_documents, output_store),
-        fee_documents=await _resolve_and_extract(entry.fee_documents, output_store),
+        urbanization_documents=await _resolve_and_extract(
+            entry.urbanization_documents, output_store, processed_by_url
+        ),
+        fee_documents=await _resolve_and_extract(entry.fee_documents, output_store, processed_by_url),
     )
     output_store.record(resolved_entry)
 

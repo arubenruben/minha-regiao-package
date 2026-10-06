@@ -37,7 +37,10 @@ class Settings(BaseSettings):
 
     # Which sinks the flow writes the enriched RMUE entries to. Defaults to
     # json-only, so reproducing this flow never requires a database; opt
-    # into "database" explicitly.
+    # into "database" explicitly. "database" also makes Postgres a source of
+    # idempotence: the documents already in it are read at the start of the
+    # run and not resolved/extracted (or written) again -- see
+    # extract_rmues.tasks.FindProcessedDocuments.
     load_targets: list[Literal["database", "json"]] = ["json"]
 
     # Where the enriched RMUE entries (with resolved pdf_url and extracted

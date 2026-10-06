@@ -8,10 +8,42 @@ from minha_regiao.entity.FeeRegulation import FeeRegulation
 from minha_regiao.entity.RMUE import RMUE
 from minha_regiao.gazette.StructureDeduplicator import deduplicate_structure, describe_duplicates
 from minha_regiao.utils.FuzzyMatch import resolve_name
-from extract_rmues.schema.RMUERegulation import RegulationDocument, RMUERegulation
+from extract_rmues.schema.RMUERegulation import DocumentStatus, RegulationDocument, RMUERegulation
 from extract_rmues.services.RegulationMetadata import extract_year, is_complete
 
 logger = logging.getLogger(__name__)
+
+
+def _to_regulation_document(row: RMUE | FeeRegulation) -> RegulationDocument:
+    """Rebuilds a `RegulationDocument` from a persisted `RMUE`/`FeeRegulation`
+    row, with every persisted field -- including `status`, `raw_text` and the
+    `structure` JSON column, which pydantic validates back into
+    `list[StructureNode]`.
+    """
+    return RegulationDocument.model_validate(
+        {
+            "name": row.name,
+            "dre_url": row.dre_url,
+            "pdf_url": row.pdf_url,
+            "status": DocumentStatus(row.status.value),
+            "raw_text": row.raw_text,
+            "structure": row.structure,
+        }
+    )
+
+
+async def find_processed_documents(db_url: str) -> dict[str, RegulationDocument]:
+    """Reads every `RMUE` and `FeeRegulation` row back as a
+    `RegulationDocument`, keyed by `dre_url` -- the database as a source of
+    idempotence, for when the local `OutputStore` state file isn't there
+    (another machine, a fresh container, a deleted file). A document found
+    here is never resolved/extracted again, whatever its `status`, the same
+    as one found in the `OutputStore`.
+    """
+    async with connection(db_url):
+        rows = [*await RMUE.all(), *await FeeRegulation.all()]
+
+    return {row.dre_url: _to_regulation_document(row) for row in rows}
 
 
 def _dump_structure(document: RegulationDocument) -> list[dict] | None:
@@ -75,6 +107,11 @@ async def persist_regulation_results(
     rows written, the municipality names that couldn't be matched, and the
     names of the documents whose year couldn't be parsed (and were
     therefore skipped).
+
+    Every document in `entries` is written: filtering out the ones already
+    in the database (see `find_processed_documents`) is the caller's job --
+    see extract_rmues.ExtractRMUEs -- so each document reaches Postgres
+    exactly once.
     """
     async with connection(db_url):
         cities_by_name = {city.name: city async for city in City.all()}

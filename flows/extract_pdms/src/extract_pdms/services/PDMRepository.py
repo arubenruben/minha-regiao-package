@@ -59,6 +59,43 @@ def _dump_structure(document: RegulationDocument) -> list[dict] | None:
     return [node.model_dump(mode="json") for node in result.structure]
 
 
+def _to_regulation_document(row: PDMDocument) -> RegulationDocument:
+    """Rebuilds a `RegulationDocument` from a persisted `PDMDocument` row,
+    with every persisted field -- including `status`, `text` and the
+    `structure` JSON column, which pydantic validates back into
+    `list[StructureNode]`.
+    """
+    return RegulationDocument.model_validate(
+        {
+            "url": row.url,
+            "doc_type": row.doc_type,
+            "number": row.number,
+            "year": row.year,
+            "suffix": row.suffix,
+            "data_publicacao": row.data_publicacao,
+            "dinamica": row.dinamica,
+            "publicacao": row.publicacao,
+            "status": DocumentStatus(row.status.value),
+            "text": row.text,
+            "structure": row.structure,
+        }
+    )
+
+
+async def find_processed_documents(db_url: str) -> dict[str, RegulationDocument]:
+    """Reads every `PDMDocument` row back as a `RegulationDocument`, keyed by
+    its url -- the database as a source of idempotence, for when the local
+    `OutputStore` state file isn't there (another machine, a fresh container,
+    a deleted file). A document found here is never downloaded/extracted
+    again, whatever its `status`, the same as one found in the `OutputStore`.
+    """
+    async with connection(db_url):
+        rows = await PDMDocument.all()
+
+    documents = (_to_regulation_document(row) for row in rows)
+    return {str(document.url): document for document in documents}
+
+
 async def _persist_documents(pdm: PDM, documents: list[RegulationDocument]) -> None:
     for document in documents:
         await PDMDocument.update_or_create(
@@ -79,17 +116,24 @@ async def _persist_documents(pdm: PDM, documents: list[RegulationDocument]) -> N
         )
 
 
-async def persist_pdms(db_url: str, records: list[PDMRecord]) -> int:
+async def persist_pdms(
+    db_url: str, records: list[PDMRecord], processed_by_url: dict[str, RegulationDocument]
+) -> int:
     """Matches each `PDMRecord`'s municipality against `City` (fuzzy, same
     as `extract_rmues.services.RMURepository.persist_regulation_results`) and
     upserts one `PDM` row per city -- `title`/`identifier` straight off the
     record, `pdf_url` set to the most recent successfully-extracted
     regulation document's url (or left null if none extracted
-    successfully yet) -- plus one `PDMDocument` row per entry in
-    `record.documents`, capturing every revision's own extraction outcome
-    (`status`/`text`/`structure`), not just the latest one. Records that
-    don't match a city are skipped and logged rather than aborting the
-    whole batch.
+    successfully yet), both computed over *all* of `record.documents` --
+    plus one `PDMDocument` row per entry in `record.documents`, capturing
+    every revision's own extraction outcome (`status`/`text`/`structure`),
+    not just the latest one. Records that don't match a city are skipped
+    and logged rather than aborting the whole batch.
+
+    A document already in `processed_by_url` (see `find_processed_documents`)
+    is not written again, even if this run reused it from the `OutputStore`
+    rather than from the database: each document is written to Postgres
+    exactly once, on its first complete run.
     """
     async with connection(db_url):
         cities_by_name = {city.name: city async for city in City.all()}
@@ -115,7 +159,8 @@ async def persist_pdms(db_url: str, records: list[PDMRecord]) -> int:
                     "pdf_url": str(latest_document.url) if latest_document else None,
                 },
             )
-            await _persist_documents(pdm, record.documents)
+            new_documents = [document for document in record.documents if str(document.url) not in processed_by_url]
+            await _persist_documents(pdm, new_documents)
             persisted += 1
 
     if unmatched_cities:
