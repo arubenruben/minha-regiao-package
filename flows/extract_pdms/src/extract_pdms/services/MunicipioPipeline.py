@@ -14,10 +14,11 @@ from extract_pdms.tasks.SearchMunicipio import search_municipio_task
 
 
 def _find_processed(
-    url: str, output_store: OutputStore, processed_by_url: dict[str, RegulationDocument]
+    url: str, output_store: OutputStore | None, processed_by_url: dict[str, RegulationDocument]
 ) -> RegulationDocument | None:
-    """The `OutputStore` is looked up first, then `processed_by_url`."""
-    existing = output_store.get_document(url)
+    """The `OutputStore` (when there is one) is looked up first, then
+    `processed_by_url`."""
+    existing = output_store.get_document(url) if output_store is not None else None
     return existing if existing is not None else processed_by_url.get(url)
 
 
@@ -25,13 +26,14 @@ async def _extract_documents(
     tmp_dir: Path,
     documents: list[RegulationDocument],
     pdf_download_timeout_seconds: float,
-    output_store: OutputStore,
+    output_store: OutputStore | None,
     processed_by_url: dict[str, RegulationDocument],
 ) -> list[RegulationDocument]:
     """Resolves `documents` to their final (downloaded + text-extracted)
-    state, skipping any document already recorded in `output_store` or, failing
-    that, in `processed_by_url` (the documents already persisted in the
-    database, see extract_pdms.services.PDMRepository.find_processed_documents)
+    state, skipping any document already recorded in `output_store` (None
+    when `"json"` isn't in `load_targets`) or, failing that, in
+    `processed_by_url` (the documents already persisted in the database, see
+    extract_pdms.services.PDMRepository.find_processed_documents)
     -- idempotence here is per document (by URL), not per municipality or per
     PDM: a document's download/text-extraction is the expensive,
     failure-prone step worth not repeating, regardless of whether it
@@ -66,7 +68,7 @@ async def process_municipio(
     tmp_dir: Path,
     municipio: str,
     pdf_download_timeout_seconds: float,
-    output_store: OutputStore,
+    output_store: OutputStore | None,
     processed_by_url: dict[str, RegulationDocument],
 ) -> list[PDMRecord]:
     """One municipality's full pipeline: search SNIT, resolve its PDM(s)
@@ -78,8 +80,8 @@ async def process_municipio(
 
     Search and fetch always re-run (they're cheap metadata lookups), but
     each resolved document's download/text-extraction is skipped when
-    `output_store` or `processed_by_url` already has a result for it -- see
-    _extract_documents.
+    `output_store` (if any) or `processed_by_url` already has a result for it
+    -- see _extract_documents.
 
     Both SNIT calls retry on failure (see their tasks' `retries`), since
     the portal occasionally serves a broken response under load; once

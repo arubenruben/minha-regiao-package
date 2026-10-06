@@ -34,25 +34,23 @@ class Settings(BaseSettings):
     pdf_download_timeout_seconds: float = 60.0
 
     # Where the enriched PDM records (with extracted regulation text) are
-    # written as JSON.
+    # written as JSON, rewritten in full as each municipality finishes. Only
+    # used when "json" is in load_targets. Also the JSON mode's source of
+    # idempotence: it's read back at the start of the run, and the documents
+    # already in it aren't downloaded/extracted again -- see
+    # extract_pdms.services.OutputStore.
     output_file: Path = Path(__file__).with_name("out") / "pdms.json"
-
-    # OutputStore's resumable ExtractionState, checkpointed per-document as
-    # the run progresses. Deliberately separate from output_file: that path
-    # is overwritten with a plain JSON list (see JsonFileLoader) once the
-    # run finishes, which isn't the shape OutputStore reads back on resume.
-    state_file: Path = Path(__file__).with_name("out") / "state.json"
 
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
-    # Which sinks the flow writes its PDM records to: "database" per
-    # municipality, as each one finishes (see
-    # extract_pdms.tasks.ProcessMunicipio), "json" once at the end of the
-    # run. Defaults to JSON only, so reproducing this flow never requires a
-    # database. "database" also makes Postgres a source of idempotence: the
-    # documents already in it are read at the start of the run and not
-    # downloaded/extracted (or written) again -- see
-    # extract_pdms.ExtractPDM.find_processed_documents_task.
+    # Which sinks the flow writes its PDM records to, both per municipality,
+    # as each one finishes (see extract_pdms.tasks.ProcessMunicipio):
+    # "database" and "json". Defaults to JSON only, so reproducing this flow
+    # never requires a database. Each target is also a source of idempotence
+    # for its own mode: "json" reads output_file back, and "database" reads
+    # the documents already in Postgres at the start of the run (see
+    # extract_pdms.ExtractPDM.find_processed_documents_task) -- either way,
+    # they aren't downloaded/extracted (or written) again.
     load_targets: list[Literal["database", "json"]] = ["json"]
 
 

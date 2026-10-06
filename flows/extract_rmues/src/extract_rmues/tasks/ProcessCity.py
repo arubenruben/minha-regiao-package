@@ -21,23 +21,24 @@ PROCESS_CITY_TAG = "rmue-city-pipeline"
 
 
 def _find_processed(
-    dre_url: str, output_store: OutputStore, processed_by_url: dict[str, RegulationDocument]
+    dre_url: str, output_store: OutputStore | None, processed_by_url: dict[str, RegulationDocument]
 ) -> RegulationDocument | None:
-    """The `OutputStore` is looked up first, then `processed_by_url`."""
-    cached = output_store.get_document(dre_url)
+    """The `OutputStore` (when there is one) is looked up first, then
+    `processed_by_url`."""
+    cached = output_store.get_document(dre_url) if output_store is not None else None
     return cached if cached is not None else processed_by_url.get(dre_url)
 
 
 async def _resolve_and_extract(
     documents: list[RegulationDocument],
-    output_store: OutputStore,
+    output_store: OutputStore | None,
     processed_by_url: dict[str, RegulationDocument],
 ) -> list[RegulationDocument]:
     """Resolves each document's PDF url and extracts its own notice
     text/structure, skipping any document already recorded in
-    `output_store` or, failing that, in `processed_by_url` (the documents
-    already persisted in the database, see
-    extract_rmues.services.RMURepository.find_processed_documents) --
+    `output_store` (None when `"json"` isn't in `load_targets`) or, failing
+    that, in `processed_by_url` (the documents already persisted in the
+    database, see extract_rmues.services.RMURepository.find_processed_documents) --
     idempotence here is per document (by dre_url), mirroring
     extract_pdms.services.MunicipioPipeline._extract_documents: a
     document's PDF resolution + text extraction is the expensive,
@@ -105,7 +106,7 @@ def _without_processed(
 @task(name="process_city", tags=[PROCESS_CITY_TAG], persist_result=False)
 async def process_city_task(
     entry: RMUERegulation,
-    output_store: OutputStore,
+    output_store: OutputStore | None,
     processed_by_url: dict[str, RegulationDocument],
 ) -> RMUERegulation:
     """One municipality's full pipeline: resolves each of its documents'
@@ -122,16 +123,22 @@ async def process_city_task(
     extract_rmues.tasks.ParseRmuePage), so the returned entry is already
     this city's complete set of documents, each with its final
     pdf_url/status/raw_text/structure -- there's nothing to merge with
-    what `output_store` already has for it. It's recorded there (persisting
-    it to disk immediately -- see OutputStore.record) before returning.
+    what `output_store` already has for it.
 
-    When `"database"` is in `load_targets`, the city is also written to the
-    database as the very last step -- only once *all* of its urbanization and
-    fee documents have reached their final state, never part-way through --
+    Only once *all* of the city's urbanization and fee documents have reached
+    their final state -- never part-way through -- is it written to each
+    configured sink. When `"database"` is in `load_targets`, to the database,
     with just the documents not already in `processed_by_url` (skipped
     entirely when there are none). Several of these task runs persist at the
     same time, from different threads --
     `minha_regiao.database.DatabaseManager.connection` serialises them.
+    Then, as the very last step, the city is recorded in `output_store` (the
+    JSON output file, rewritten with this city included -- see
+    OutputStore.record), unless it's None because `"json"` isn't in
+    `load_targets`. Recording last means a city only counts as processed for
+    the JSON mode once every other configured sink has it too: if the
+    database persist fails, the city isn't in the JSON file and is processed
+    again on the next run.
 
     `processed_by_url` is the documents already persisted in the database
     (see extract_rmues.tasks.FindProcessedDocuments), the same read-only dict
@@ -147,12 +154,14 @@ async def process_city_task(
         ),
         fee_documents=await _resolve_and_extract(entry.fee_documents, output_store, processed_by_url),
     )
-    output_store.record(resolved_entry)
 
     document_count = len(resolved_entry.urbanization_documents) + len(resolved_entry.fee_documents)
     logger.info(f"{entry.municipality}: processed {document_count} document(s)")
 
     if "database" in settings.load_targets and (new_entry := _without_processed(resolved_entry, processed_by_url)):
         await persist_regulation_results_task([new_entry])
+
+    if output_store is not None:
+        await output_store.record(resolved_entry)
 
     return resolved_entry
