@@ -1,13 +1,18 @@
+import logging
+
 from tortoise.models import Model
 
 from minha_regiao.database.DatabaseManager import connection
 from minha_regiao.entity.City import City
 from minha_regiao.entity.FeeRegulation import FeeRegulation
 from minha_regiao.entity.RMUE import RMUE
+from minha_regiao.gazette.StructureDeduplicator import deduplicate_structure, describe_duplicates
 from minha_regiao.utils.FuzzyMatch import resolve_name
 from extract_rmues.schema.PendingDocument import PendingDocument
 from extract_rmues.schema.RMUERegulation import RegulationDocument, RMUERegulation
 from extract_rmues.services.RegulationMetadata import extract_year, is_complete
+
+logger = logging.getLogger(__name__)
 
 _MODELS_BY_TABLE: dict[str, type[Model]] = {
     "rmue": RMUE,
@@ -97,7 +102,22 @@ async def find_documents_missing_pdf_url(db_url: str) -> list[PendingDocument]:
 
 
 def _dump_structure(document: RegulationDocument) -> list[dict] | None:
-    return [node.model_dump(mode="json") for node in document.structure] if document.structure else None
+    """`parse_structure` already deduplicates, but a structure read back from
+    an earlier run's JSON output was parsed before that existed and may still
+    carry the same article twice -- so it's deduplicated again here, right
+    before it's persisted (a no-op on an already-clean tree).
+    """
+    if not document.structure:
+        return None
+
+    result = deduplicate_structure(document.structure)
+    if result.duplicates:
+        logger.warning(
+            f"Removed {len(result.duplicates)} duplicate article(s) from the structure of {document.dre_url}: "
+            f"{describe_duplicates(result.duplicates)}"
+        )
+
+    return [node.model_dump(mode="json") for node in result.structure]
 
 
 async def persist_regulation_results(

@@ -29,8 +29,17 @@ raw DR page range bundles unrelated notices from other
 municipalities/entities), and parsing that notice's legal
 Parte/Título/Capítulo/Secção/Subsecção/Artigo structure is shared, not
 extract_pdms-specific -- see `minha_regiao.gazette` (`PdfTextExtractor.py`,
-`GazetteSegmenter.py`, `StructureParser.py`, `RegulationStructure.py`, and
-their exceptions), also used by `extract_rmues`.
+`GazetteSegmenter.py`, `StructureParser.py`, `RegulationStructure.py`,
+`StructureDeduplicator.py`, and their exceptions), also used by
+`extract_rmues`.
+
+An amending aviso quotes each article it changes and then republishes the
+consolidated regulation, so the same Artigo can come out of the parser twice.
+`parse_structure` collapses those copies, and `services/PDMRepository.py`
+applies the same deduplication again before persisting `structure`, logging a
+warning for what it removes -- so a structure read back from an earlier run's
+JSON output, parsed before this existed, is cleaned too. Rows already
+persisted with duplicates are not reprocessed.
 
 ## Prerequisites
 
