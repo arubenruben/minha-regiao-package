@@ -46,8 +46,11 @@ class Settings(BaseSettings):
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
     # Which sinks the flow writes its PDM records to at the end of the run.
-    # Defaults to JSON only, matching this flow's original (pre-Loader)
-    # behavior exactly -- extract_pdms has no database persistence today.
+    # Defaults to JSON only, so reproducing this flow never requires a
+    # database. "database" also makes Postgres a source of idempotence: the
+    # documents already in it are read at the start of the run and not
+    # downloaded/extracted (or written) again -- see
+    # extract_pdms.ExtractPDM.find_processed_documents_task.
     load_targets: list[Literal["database", "json"]] = ["json"]
 
 

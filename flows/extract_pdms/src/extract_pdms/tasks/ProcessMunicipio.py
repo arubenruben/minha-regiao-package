@@ -3,6 +3,7 @@ from pathlib import Path
 from prefect import task
 from scrapling.fetchers import AsyncStealthySession
 
+from extract_pdms.schema.RegulationDocument import RegulationDocument
 from extract_pdms.services.MunicipioPipeline import process_municipio
 from extract_pdms.services.OutputStore import OutputStore
 
@@ -23,6 +24,7 @@ async def process_municipio_task(
     tmp_dir: Path,
     pdf_download_timeout_seconds: float,
     output_store: OutputStore,
+    processed_by_url: dict[str, RegulationDocument],
 ) -> None:
     """Resolves one municipality's PDM(s), extracts their regulation text,
     and records the result into `output_store` (persisting it to disk).
@@ -35,10 +37,17 @@ async def process_municipio_task(
     every mapped call, so -- like the session below -- it's passed directly
     rather than through a cache-key-hashed parameter; that's safe here
     because persist_result is off.
+
+    `processed_by_url` is the documents already persisted in the database
+    (see extract_pdms.ExtractPDM.find_processed_documents_task), the same
+    read-only dict for every mapped call; the caller wraps it in `quote` so
+    Prefect doesn't walk its whole contents again for each task run.
     """
     async with AsyncStealthySession(
         headless=True, network_idle=True, max_pages=_PAGES_PER_MUNICIPIO_SESSION
     ) as session:
-        records = await process_municipio(session, tmp_dir, municipio, pdf_download_timeout_seconds, output_store)
+        records = await process_municipio(
+            session, tmp_dir, municipio, pdf_download_timeout_seconds, output_store, processed_by_url
+        )
 
     output_store.record(municipio, records)
