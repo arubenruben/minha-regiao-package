@@ -910,6 +910,7 @@ dependencies = [
     { name = "minha-regiao" },
     { name = "prefect", extra = ["docker"] },
     { name = "scrapling", extra = ["fetchers"] },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -918,6 +919,7 @@ requires-dist = [
     { name = "minha-regiao", editable = "minha_regiao" },
     { name = "prefect", extras = ["docker"], specifier = ">=3.6.12" },
     { name = "scrapling", extras = ["fetchers"], specifier = ">=0.4.10" },
+    { name = "tqdm", specifier = ">=4.68.4" },
 ]
 
 [[package]]

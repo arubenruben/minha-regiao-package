@@ -1,8 +1,11 @@
+import logging
 from typing import Callable
 
 from scrapling.fetchers import AsyncStealthySession
 
 from extract_rmues.services.RMUEPageParser import parse_pdf_url
+
+logger = logging.getLogger(__name__)
 
 # On current DR detail pages the PDF isn't a plain link: the visible button
 # has href="#" and only fires an XHR to the real file (under
@@ -22,7 +25,10 @@ def _make_pdf_capture_action(captured: dict[str, str]) -> Callable:
             await page.click(PDF_BUTTON_SELECTOR, timeout=5000)
             await page.wait_for_timeout(3000)
         except Exception:
-            pass
+            logger.debug(
+                "PDF capture click/wait failed; falling back to plain anchor parsing",
+                exc_info=True,
+            )
 
         return page
 
