@@ -6,19 +6,19 @@ República website, by city.
 
 ```
 extract_rmues/
-  ExtractRMUEs.py          the flow: parse the RMUE page, persist, then
-                            fan out one task run per municipality to
-                            resolve/extract its documents
+  ExtractRMUEs.py          the flow: parse the RMUE page, fan out one task
+                            run per municipality to resolve/extract its
+                            documents, then write the results
   Settings.py / .env       source URL, database, load_targets, concurrency
-  schema/                  RMUERegulation, PendingDocument, RMUEExtractionState
+  schema/                  RMUERegulation, RMUEExtractionState
   services/
     RMUEPageParser.py       parses the DR listing page
     RegulationMetadata.py   extracts a document's year/completeness/notice
                             metadata (doc_type/number/year) from its name
     PDFResolver.py          resolves a DR detail page to its PDF url
     RMURepository.py        persists RMUERegulation -> RMUE/FeeRegulation tables
-                            (rows, then each document's pdf_url/status/
-                            raw_text/structure)
+                            (one upserted row per document, with its final
+                            pdf_url/status/raw_text/structure)
     OutputStore.py          atomic, resumable per-document JSON cache
     ConcurrencyLimiter.py   registers Prefect tag-based concurrency limits
   tasks/                   one @task per flow step; process_city is fanned
@@ -39,7 +39,7 @@ these are the same kind of raw DR gazette page range) — see
 `tasks/ExtractNoticeText.py`. The result -- `pdf_url`, `status`, `raw_text`,
 and `structure` -- is recorded onto each document in `RMUERegulation` (see
 `schema/RMUERegulation.py`), and, when `database` is in `LOAD_TARGETS`,
-written back onto the matching `RMUE`/`FeeRegulation` row by
+written to the matching `RMUE`/`FeeRegulation` row by
 `tasks/PersistRegulationResults.py` -- not just the JSON output.
 
 An amending aviso quotes each article it changes and then republishes the
@@ -48,8 +48,9 @@ consolidated regulation, so the same Artigo can come out of the parser twice.
 `minha_regiao.gazette.StructureDeduplicator`), and `services/RMURepository.py`
 applies the same deduplication again before persisting `structure`, logging a
 warning for what it removes -- so a structure read back from an earlier run's
-JSON output, parsed before this existed, is cleaned too. Rows already
-persisted with duplicates are not reprocessed.
+state file, parsed before this existed, is cleaned too. Since every run
+upserts every document, rows already persisted with duplicates are
+overwritten with the cleaned structure on the next run.
 
 ## Prerequisites
 
@@ -85,17 +86,27 @@ uv run --package extract_rmues python -m extract_rmues.ExtractRMUEs
 uv run --package minha_regiao_cli minha-regiao run extract-rmues
 ```
 
-After persisting the parsed regulations, the flow fans out one task run per
-municipality (`process_city_task`, see `tasks/ProcessCity.py`) to resolve
-that city's documents' PDF urls and extract their own notice text/
-structure. Its document source is gated by `load_targets`: with `database`
-it resolves every document still missing a `pdf_url` in Postgres (including
-backlog from prior runs); with the default `["json"]`, it resolves only
-this run's freshly-parsed documents in memory — so the flow needs no
-database at all. Once every municipality is processed, with `database` in
-`load_targets` each document's `pdf_url`/`status`/`raw_text`/`structure` is
-written back onto its `RMUE`/`FeeRegulation` row (`tasks/
-PersistRegulationResults.py`).
+The flow has a single path, independent of `load_targets`: the documents it
+processes always come from the listing page parsed in the current run
+(`parse_rmue_page_task`), never from the database. It maps
+`process_city_task` (see `tasks/ProcessCity.py`) directly over the parsed
+entries, one task run per municipality. Each run resolves the PDF url of
+that city's `urbanization_documents` and `fee_documents` (separately) and
+extracts their own notice text/structure, and returns the city's *complete*
+set of documents -- a document whose PDF url couldn't be resolved comes
+back with `status=pdf_url_not_found`.
+
+Nothing is written to the database while the cities are being processed.
+Once every municipality is done, one call writes all the resolved entries to
+each sink in `load_targets`: with `database`, `tasks/PersistRegulationResults.py`
+upserts one `RMUE`/`FeeRegulation` row per document, keyed by
+`(city, dre_url)`, with its `year`/`name`/`is_complete` and its final
+`pdf_url`/`status`/`raw_text`/`structure`; with `json`, the same entries go to
+`OUTPUT_FILE`. So a document reaches Postgres exactly once, already
+complete -- an interrupted run leaves no half-filled rows behind -- and the
+flow needs no database at all with the default `["json"]`. Municipalities
+that don't match a `City`, and documents skipped because no year could be
+parsed from their name, are logged as warnings.
 
 ## Concurrency
 
@@ -118,14 +129,16 @@ and worth skipping on a re-run:
 
 - `OutputStore` (`services/OutputStore.py`) persists every document's
   result — keyed by `dre_url`, regardless of whether it succeeded — to
-  `STATE_FILE` as soon as each city's processing finishes. A document
-  already present there is reused instead of reopening a browser /
-  re-downloading its PDF for it, the same way a failed
-  resolution/extraction isn't retried either.
-- With `database` in `load_targets`, a document whose `pdf_url` has already
-  been persisted to Postgres also falls out of `find_documents_missing_pdf_url`
-  entirely on a later run — but its enriched record (text/structure) stays
-  in `STATE_FILE`/`OUTPUT_FILE` from the run that processed it:
-  `process_city_task` merges each run's (often partial) results onto
-  whatever `OutputStore` already has for that city, rather than replacing
-  it outright.
+  `STATE_FILE` as soon as each city's processing finishes. It is always
+  written, whatever `load_targets` is. A document already present there is
+  reused instead of reopening a browser / re-downloading its PDF for it,
+  the same way a failed resolution/extraction isn't retried either.
+- Because every run starts from the freshly parsed listing page and
+  `process_city_task` returns each city's complete document set (cached
+  documents included), there is nothing to merge with what `OutputStore`
+  already has for a city, and the database never decides what gets
+  processed. With `database` in `load_targets`, an unchanged document is
+  simply upserted again, by `(city, dre_url)`, with the same values it
+  already has.
+- To retry a document that failed, remove its entry (or the whole
+  `STATE_FILE`) and run again.

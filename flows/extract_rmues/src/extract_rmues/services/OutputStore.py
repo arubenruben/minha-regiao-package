@@ -22,8 +22,7 @@ class OutputStore:
     extracting its own notice text/structure. Idempotence is tracked per
     document (by dre_url) via `get_document`, mirroring
     extract_pdms.services.OutputStore -- not per municipality, since a
-    municipality's own document set can grow across runs (see
-    `get_entry`/`record`).
+    municipality's own document set can grow across runs.
 
     `record()` is the flow's critical section and its only mutator: it's
     called once per municipality, concurrently, from every mapped task run
@@ -72,15 +71,6 @@ class OutputStore:
         result reused instead, regardless of whether it succeeded."""
         with self._lock:
             return self._documents_by_url.get(dre_url)
-
-    def get_entry(self, municipality: str) -> RMUERegulation | None:
-        """Returns this municipality's previously recorded entry, if any --
-        used by extract_rmues.tasks.ProcessCity to merge this run's (often
-        partial, e.g. only documents still missing a PDF url in Postgres)
-        results into the full document set already on record, rather than
-        overwriting it and losing documents this run didn't touch."""
-        with self._lock:
-            return self._records.get(municipality)
 
     def record(self, entry: RMUERegulation) -> None:
         """Upserts `entry` -- keyed by municipality, so re-processing the

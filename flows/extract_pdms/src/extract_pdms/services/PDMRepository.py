@@ -81,7 +81,7 @@ async def _persist_documents(pdm: PDM, documents: list[RegulationDocument]) -> N
 
 async def persist_pdms(db_url: str, records: list[PDMRecord]) -> int:
     """Matches each `PDMRecord`'s municipality against `City` (fuzzy, same
-    as `extract_rmues.services.RMURepository.persist_rmue_regulations`) and
+    as `extract_rmues.services.RMURepository.persist_regulation_results`) and
     upserts one `PDM` row per city -- `title`/`identifier` straight off the
     record, `pdf_url` set to the most recent successfully-extracted
     regulation document's url (or left null if none extracted

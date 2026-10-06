@@ -87,7 +87,7 @@ and their wiring into [`extract_pdms/src/extract_pdms/ExtractPDM.py`](extract_pd
    - `DatabaseLoader` wraps a flow's own, already-existing repository
      function (e.g. `CityRepository.persist_cities`,
      `DistrictRepository.persist_districts`, `ParishRepository.persist_parishes`,
-     `RMURepository.persist_rmue_regulations`, `PDMRepository.persist_pdms`) —
+     `RMURepository.persist_regulation_results`, `PDMRepository.persist_pdms`) —
      the entity-specific `update_or_create` mapping stays in that function.
    - `JsonFileLoader` writes `[r.model_dump(mode="json") for r in records]` to
      a `Path`, atomically (write-then-replace with retry-on-`PermissionError`,

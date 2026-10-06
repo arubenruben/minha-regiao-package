@@ -1,7 +1,7 @@
 from prefect import get_run_logger, task
 from scrapling.fetchers import AsyncStealthySession
 
-from extract_rmues.schema.PendingDocument import PendingDocument
+from extract_rmues.schema.RMUERegulation import RegulationDocument
 from extract_rmues.services.PDFResolver import resolve_pdf_url
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
@@ -18,7 +18,7 @@ _PAGES_PER_RESOLVE_SESSION = 1
 
 
 @task(name="resolve_pdf_url", tags=[RESOLVE_PDF_URL_TAG], persist_result=False)
-async def resolve_pdf_url_task(document: PendingDocument) -> PendingDocument:
+async def resolve_pdf_url_task(document: RegulationDocument) -> RegulationDocument:
     """Resolves `document`'s PDF url from its Diário da República detail
     page. A failure to resolve (page load error, button not found, no PDF
     ever fires) is recorded as `pdf_url=None` rather than raised, so one
