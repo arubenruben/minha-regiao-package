@@ -9,6 +9,7 @@ from minha_regiao.gazette.RegulationStructure import (
     Subsection,
     Title,
 )
+from minha_regiao.gazette.StructureDeduplicator import deduplicate_structure
 
 _ROMAN = r"[IVXLCDM]+"
 
@@ -142,6 +143,12 @@ def parse_structure(text: str) -> list[StructureNode]:
     the current Capítulo, ...), but never the levels *above* it -- modelled
     here as popping the open-container stack down to (and including) the
     re-entered level before attaching the new node.
+
+    The tree is deduplicated before it's returned (see
+    minha_regiao.gazette.StructureDeduplicator): an amendment aviso quotes
+    each article it changes and then republishes the consolidated regulation,
+    and this parser, having no notion of quotation, reads both copies as real
+    Artigos.
     """
     lines = text.splitlines()
 
@@ -261,4 +268,4 @@ def parse_structure(text: str) -> list[StructureNode]:
         index += 1
 
     flush()
-    return roots
+    return deduplicate_structure(roots).structure

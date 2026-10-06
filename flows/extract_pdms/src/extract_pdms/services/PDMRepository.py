@@ -3,6 +3,7 @@ import logging
 from minha_regiao.database.DatabaseManager import connection
 from minha_regiao.entity.City import City
 from minha_regiao.entity.PDM import PDM, PDMDocument
+from minha_regiao.gazette.StructureDeduplicator import deduplicate_structure, describe_duplicates
 from minha_regiao.utils.FuzzyMatch import resolve_name
 
 from extract_pdms.schema.PDMRecord import PDMRecord
@@ -40,7 +41,22 @@ def _build_source_url(identifier: str) -> str:
 
 
 def _dump_structure(document: RegulationDocument) -> list[dict] | None:
-    return [node.model_dump(mode="json") for node in document.structure] if document.structure else None
+    """`parse_structure` already deduplicates, but a structure read back from
+    an earlier run's JSON output was parsed before that existed and may still
+    carry the same article twice -- so it's deduplicated again here, right
+    before it's persisted (a no-op on an already-clean tree).
+    """
+    if not document.structure:
+        return None
+
+    result = deduplicate_structure(document.structure)
+    if result.duplicates:
+        logger.warning(
+            f"Removed {len(result.duplicates)} duplicate article(s) from the structure of {document.url}: "
+            f"{describe_duplicates(result.duplicates)}"
+        )
+
+    return [node.model_dump(mode="json") for node in result.structure]
 
 
 async def _persist_documents(pdm: PDM, documents: list[RegulationDocument]) -> None:
