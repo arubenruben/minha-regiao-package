@@ -45,8 +45,10 @@ class Settings(BaseSettings):
 
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
-    # Which sinks the flow writes its PDM records to at the end of the run.
-    # Defaults to JSON only, so reproducing this flow never requires a
+    # Which sinks the flow writes its PDM records to: "database" per
+    # municipality, as each one finishes (see
+    # extract_pdms.tasks.ProcessMunicipio), "json" once at the end of the
+    # run. Defaults to JSON only, so reproducing this flow never requires a
     # database. "database" also makes Postgres a source of idempotence: the
     # documents already in it are read at the start of the run and not
     # downloaded/extracted (or written) again -- see

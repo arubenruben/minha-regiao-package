@@ -1,11 +1,15 @@
 from pathlib import Path
 
 from prefect import task
+from prefect.utilities.annotations import quote
 from scrapling.fetchers import AsyncStealthySession
 
+from extract_pdms.schema.PDMRecord import PDMRecord
 from extract_pdms.schema.RegulationDocument import RegulationDocument
 from extract_pdms.services.MunicipioPipeline import process_municipio
 from extract_pdms.services.OutputStore import OutputStore
+from extract_pdms.Settings import settings
+from extract_pdms.tasks.PersistPdms import persist_pdms_task
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
 # (see extract_pdms.ExtractPDM), sized directly from settings.snit_concurrency
@@ -18,6 +22,21 @@ PROCESS_MUNICIPIO_TAG = "pdm-municipio-pipeline"
 _PAGES_PER_MUNICIPIO_SESSION = 1
 
 
+def _has_records_to_persist(
+    records: list[PDMRecord], processed_by_url: dict[str, RegulationDocument]
+) -> bool:
+    """False when there is nothing to write: no records, or every document of
+    every record already in `processed_by_url`. A record with no documents at
+    all still counts -- its `PDM` row (title/identifier/source_url) is itself
+    something to write, and `processed_by_url` can't say whether it exists.
+    """
+    return any(
+        not record.documents
+        or any(str(document.url) not in processed_by_url for document in record.documents)
+        for record in records
+    )
+
+
 @task(name="process_municipio", tags=[PROCESS_MUNICIPIO_TAG], persist_result=False)
 async def process_municipio_task(
     municipio: str,
@@ -27,7 +46,14 @@ async def process_municipio_task(
     processed_by_url: dict[str, RegulationDocument],
 ) -> None:
     """Resolves one municipality's PDM(s), extracts their regulation text,
-    and records the result into `output_store` (persisting it to disk).
+    records the result into `output_store` (persisting it to disk) and, as
+    the last step, writes it to the database when `"database"` is in
+    `load_targets`. `process_municipio` only returns once every one of the
+    municipality's documents has reached its final state, so the database
+    never sees a document half-processed; the persist is skipped when
+    there's nothing to write (see `_has_records_to_persist`). Several of
+    these task runs persist at the same time, from different threads --
+    `minha_regiao.database.DatabaseManager.connection` serialises them.
     Mapped once per municipality (see extract_pdms.ExtractPDM), each call
     opens its own AsyncStealthySession rather than sharing one: Prefect's
     task runner executes each mapped call on its own fresh event loop in
@@ -51,3 +77,8 @@ async def process_municipio_task(
         )
 
     output_store.record(municipio, records)
+
+    if "database" in settings.load_targets and _has_records_to_persist(records, processed_by_url):
+        # `quote`: same reason as in ExtractPDM -- skips Prefect walking
+        # every document in `processed_by_url` again for this nested task run.
+        await persist_pdms_task(records, quote(processed_by_url))

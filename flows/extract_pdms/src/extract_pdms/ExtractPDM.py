@@ -12,9 +12,8 @@ from extract_pdms.schema.RegulationDocument import RegulationDocument
 from extract_pdms.services import SnitSearch
 from extract_pdms.services.ConcurrencyLimiter import ensure_concurrency_limit
 from extract_pdms.services.OutputStore import OutputStore
-from extract_pdms.services.PDMRepository import find_processed_documents, persist_pdms
+from extract_pdms.services.PDMRepository import find_processed_documents
 from extract_pdms.Settings import settings
-from minha_regiao.loader.DatabaseLoader import DatabaseLoader
 from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 from extract_pdms.tasks.ExtractPdfText import EXTRACT_PDF_TEXT_TAG
 from extract_pdms.tasks.FetchRegulationDocuments import FETCH_REGULATION_DOCUMENTS_TAG
@@ -42,22 +41,6 @@ async def find_processed_documents_task() -> dict[str, RegulationDocument]:
 
     logger.info(f"Found {len(processed_by_url)} already processed document(s) in the database")
     return processed_by_url
-
-
-@task(name="persist_pdms", persist_result=False)
-async def persist_pdms_task(
-    records: list[PDMRecord], processed_by_url: dict[str, RegulationDocument]
-) -> None:
-    logger = get_run_logger()
-
-    loader = DatabaseLoader[PDMRecord](
-        lambda batch: persist_pdms(settings.database_url, batch, processed_by_url)
-    )
-    await loader.load(records)
-
-    logger.info(
-        f"Persisted PDM records for {len(records)} municipalities to the database"
-    )
 
 
 @task(name="write_pdms_json")
@@ -102,6 +85,14 @@ async def extract_pdms() -> list[PDMRecord]:
     extract_pdms.services.PDMRepository.persist_pdms), so each document
     reaches Postgres exactly once. See
     extract_pdms.services.MunicipioPipeline._extract_documents.
+
+    The database is written incrementally, by municipality: each
+    `process_municipio_task` persists its own records (see
+    extract_pdms.tasks.PersistPdms) as its last step, once all of its
+    documents are final, so an interrupted run keeps everything the
+    finished municipalities already produced. This flow only waits for the
+    futures and logs the summary, then writes the JSON target (a single file
+    for every municipality) when `"json"` is in `load_targets`.
     """
     logger = get_run_logger()
 
@@ -143,8 +134,11 @@ async def extract_pdms() -> list[PDMRecord]:
 
     pdm_records = output_store.records
 
-    if "database" in settings.load_targets:
-        await persist_pdms_task(pdm_records, processed_by_url)
+    document_count = sum(len(record.documents) for record in pdm_records)
+    logger.info(
+        f"Processed {len(municipalities)} municipalities: "
+        f"{len(pdm_records)} PDM record(s), {document_count} regulation document(s)"
+    )
 
     if "json" in settings.load_targets:
         await write_pdms_json_task(pdm_records)
