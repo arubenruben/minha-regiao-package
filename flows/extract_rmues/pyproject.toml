@@ -16,6 +16,16 @@ dependencies = [
     "tqdm>=4.68.4",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=1.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
 [tool.uv.sources]
 minha_regiao = { workspace = true }
 
