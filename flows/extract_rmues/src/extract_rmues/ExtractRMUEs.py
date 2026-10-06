@@ -15,7 +15,6 @@ from extract_rmues.tasks.FindProcessedDocuments import find_processed_documents_
 from extract_rmues.tasks.ParseRmuePage import parse_rmue_page_task
 from extract_rmues.tasks.ProcessCity import PROCESS_CITY_TAG, process_city_task
 from extract_rmues.tasks.ResolvePdfUrl import RESOLVE_PDF_URL_TAG
-from extract_rmues.tasks.WriteRmueJson import write_rmue_page_json_task
 
 
 @flow(
@@ -38,29 +37,33 @@ async def extract_rmues(base_url: str) -> int:
     this very run, regardless of `settings.load_targets`: each municipality
     is mapped as a whole, and comes back with its complete set of
     documents, each already carrying its final pdf_url/status/raw_text/
-    structure. The database is written incrementally, by municipality: each
-    `process_city_task` persists its own city as its last step, once all of
+    structure. Both sinks are written incrementally, by municipality: each
+    `process_city_task` persists its own city to the database and records it
+    in `output_store` (the JSON output file) as its last steps, once all of
     its documents are final (see extract_rmues.tasks.ProcessCity) -- so a
     document reaches the database exactly once, already complete, never as a
     half-filled placeholder row, and an interrupted run keeps everything the
     finished cities already produced. This flow only waits for the futures
-    and logs the summary, then writes the JSON target (a single file for
-    every city) when `"json"` is in `load_targets`.
+    and logs the summary.
 
-    Idempotent and resumable, at the document level: `output_store`
-    persists each document's PDF-resolution/text-extraction result --
-    keyed by dre_url, via its own locked critical section (see
-    OutputStore.record) -- to `settings.state_file` as soon as each city
-    finishes, and a document already recorded there (regardless of whether
-    it succeeded) is reused on the next run instead of being re-resolved
-    and re-extracted. When `"database"` is in `load_targets` the database
-    is a second source of idempotence, for when that state file is
-    missing: `processed_by_url` -- every `RMUE`/`FeeRegulation` row already
-    in Postgres, read once at the start of the run -- is consulted after
-    `output_store`, and a document found in either is reused. A document in
-    `processed_by_url` is also not written back to the database (only the
-    others are passed to the persist task), so each document reaches
-    Postgres exactly once.
+    Idempotent and resumable, at the document level: each document's
+    PDF-resolution/text-extraction result is kept, and a document already
+    kept (regardless of whether it succeeded) is reused on the next run
+    instead of being re-resolved and re-extracted. When `"json"` is in
+    `load_targets`, `output_store` is that JSON sink and a source of
+    idempotence at once: it reads `settings.output_file` when built -- keyed
+    by dre_url -- and each `process_city_task` rewrites the file with its
+    city as its last step, via its own locked critical section (see
+    OutputStore.record), so the output file is always up to date and a
+    resumed run picks up from it. When `"database"` is in `load_targets` the
+    database is a second source of idempotence: `processed_by_url` -- every
+    `RMUE`/`FeeRegulation` row already in Postgres, read once at the start of
+    the run -- is consulted after `output_store`, and a document found in
+    either is reused. A document in `processed_by_url` is also not written
+    back to the database (only the others are passed to the persist task), so
+    each document reaches Postgres exactly once. Without `"json"` in
+    `load_targets` there's no `output_store` (it's None) and the database is
+    the only source.
 
     Returns the number of documents whose PDF url was resolved.
     """
@@ -71,7 +74,7 @@ async def extract_rmues(base_url: str) -> int:
     page = await fetch_rmue_page_task(base_url)
     entries = await parse_rmue_page_task(page)
 
-    output_store = OutputStore(settings.state_file)
+    output_store = OutputStore(settings.output_file) if "json" in settings.load_targets else None
 
     await ensure_concurrency_limit(PROCESS_CITY_TAG, settings.city_concurrency)
     await ensure_concurrency_limit(RESOLVE_PDF_URL_TAG, settings.pdf_resolve_concurrency)
@@ -92,9 +95,6 @@ async def extract_rmues(base_url: str) -> int:
     documents = [document for entry in resolved for document in (*entry.urbanization_documents, *entry.fee_documents)]
     updated = sum(1 for document in documents if document.pdf_url is not None)
     logger.info(f"Resolved {updated}/{len(documents)} PDF urls in total")
-
-    if "json" in settings.load_targets:
-        await write_rmue_page_json_task(resolved)
 
     return updated
 
