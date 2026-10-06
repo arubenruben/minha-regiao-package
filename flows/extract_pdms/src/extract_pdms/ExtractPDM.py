@@ -4,13 +4,15 @@ from pathlib import Path
 from typing import cast
 
 from prefect import flow, get_run_logger, task, unmapped
+from prefect.utilities.annotations import quote
 from tqdm import tqdm
 
 from extract_pdms.schema.PDMRecord import PDMRecord
+from extract_pdms.schema.RegulationDocument import RegulationDocument
 from extract_pdms.services import SnitSearch
 from extract_pdms.services.ConcurrencyLimiter import ensure_concurrency_limit
 from extract_pdms.services.OutputStore import OutputStore
-from extract_pdms.services.PDMRepository import persist_pdms
+from extract_pdms.services.PDMRepository import find_processed_documents, persist_pdms
 from extract_pdms.Settings import settings
 from minha_regiao.loader.DatabaseLoader import DatabaseLoader
 from minha_regiao.loader.JsonFileLoader import JsonFileLoader
@@ -23,12 +25,33 @@ from extract_pdms.tasks.ProcessMunicipio import (
 from extract_pdms.tasks.SearchMunicipio import SEARCH_MUNICIPIO_TAG
 
 
-@task(name="persist_pdms")
-async def persist_pdms_task(records: list[PDMRecord]) -> None:
+@task(name="find_processed_documents", persist_result=False)
+async def find_processed_documents_task() -> dict[str, RegulationDocument]:
+    """The documents already persisted in the database, keyed by url -- or
+    `{}` when `"database"` isn't in `load_targets`, in which case the
+    database plays no part in this run. `persist_result=False`: the result
+    carries every document's full text, so it isn't hashed or persisted
+    (and a cached copy could never be trusted to still match the database).
+    """
+    logger = get_run_logger()
+
+    if "database" not in settings.load_targets:
+        return {}
+
+    processed_by_url = await find_processed_documents(settings.database_url)
+
+    logger.info(f"Found {len(processed_by_url)} already processed document(s) in the database")
+    return processed_by_url
+
+
+@task(name="persist_pdms", persist_result=False)
+async def persist_pdms_task(
+    records: list[PDMRecord], processed_by_url: dict[str, RegulationDocument]
+) -> None:
     logger = get_run_logger()
 
     loader = DatabaseLoader[PDMRecord](
-        lambda batch: persist_pdms(settings.database_url, batch)
+        lambda batch: persist_pdms(settings.database_url, batch, processed_by_url)
     )
     await loader.load(records)
 
@@ -70,10 +93,19 @@ async def extract_pdms() -> list[PDMRecord]:
     section, see OutputStore.record -- to `settings.state_file` as soon
     as it's produced, and a document already recorded there (regardless of
     whether it succeeded) is reused on the next run instead of being
-    downloaded and parsed again. See
+    downloaded and parsed again. When `"database"` is in `load_targets` the
+    database is a second source of idempotence, for when that state file is
+    missing: `processed_by_url` -- every `PDMDocument` already in Postgres,
+    read once at the start of the run -- is consulted after `output_store`,
+    and a document found in either is reused. A document in
+    `processed_by_url` is also not written back to the database (see
+    extract_pdms.services.PDMRepository.persist_pdms), so each document
+    reaches Postgres exactly once. See
     extract_pdms.services.MunicipioPipeline._extract_documents.
     """
     logger = get_run_logger()
+
+    processed_by_url = await find_processed_documents_task()
 
     output_store = OutputStore(settings.state_file)
 
@@ -96,6 +128,10 @@ async def extract_pdms() -> list[PDMRecord]:
             unmapped(tmp_dir),
             unmapped(settings.pdf_download_timeout_seconds),
             unmapped(output_store),
+            # `quote` keeps Prefect from re-walking every document in this
+            # (potentially huge) dict for each mapped task run -- see
+            # extract_pdms.tasks.ProcessMunicipio.
+            unmapped(quote(processed_by_url)),
         )
 
         with tqdm(
@@ -108,7 +144,7 @@ async def extract_pdms() -> list[PDMRecord]:
     pdm_records = output_store.records
 
     if "database" in settings.load_targets:
-        await persist_pdms_task(pdm_records)
+        await persist_pdms_task(pdm_records, processed_by_url)
 
     if "json" in settings.load_targets:
         await write_pdms_json_task(pdm_records)
