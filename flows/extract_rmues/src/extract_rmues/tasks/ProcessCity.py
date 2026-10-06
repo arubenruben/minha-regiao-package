@@ -8,7 +8,9 @@ from extract_rmues.schema.RMUERegulation import (
     RMUERegulation,
 )
 from extract_rmues.services.OutputStore import OutputStore
+from extract_rmues.Settings import settings
 from extract_rmues.tasks.ExtractNoticeText import extract_notice_text_task
+from extract_rmues.tasks.PersistRegulationResults import persist_regulation_results_task
 from extract_rmues.tasks.ResolvePdfUrl import resolve_pdf_url_task
 
 # Paired with a Prefect tag-based concurrency limit registered by the caller
@@ -83,6 +85,23 @@ async def _resolve_and_extract(
     return results
 
 
+def _without_processed(
+    entry: RMUERegulation, processed_by_url: dict[str, RegulationDocument]
+) -> RMUERegulation | None:
+    """`entry` reduced to the documents not already in `processed_by_url` --
+    the ones that still have to be written to the database -- or None when
+    there are none left.
+    """
+    new_entry = RMUERegulation(
+        municipality=entry.municipality,
+        urbanization_documents=[
+            document for document in entry.urbanization_documents if document.dre_url not in processed_by_url
+        ],
+        fee_documents=[document for document in entry.fee_documents if document.dre_url not in processed_by_url],
+    )
+    return new_entry if new_entry.urbanization_documents or new_entry.fee_documents else None
+
+
 @task(name="process_city", tags=[PROCESS_CITY_TAG], persist_result=False)
 async def process_city_task(
     entry: RMUERegulation,
@@ -106,6 +125,14 @@ async def process_city_task(
     what `output_store` already has for it. It's recorded there (persisting
     it to disk immediately -- see OutputStore.record) before returning.
 
+    When `"database"` is in `load_targets`, the city is also written to the
+    database as the very last step -- only once *all* of its urbanization and
+    fee documents have reached their final state, never part-way through --
+    with just the documents not already in `processed_by_url` (skipped
+    entirely when there are none). Several of these task runs persist at the
+    same time, from different threads --
+    `minha_regiao.database.DatabaseManager.connection` serialises them.
+
     `processed_by_url` is the documents already persisted in the database
     (see extract_rmues.tasks.FindProcessedDocuments), the same read-only dict
     for every mapped call; the caller wraps it in `quote` so Prefect doesn't
@@ -124,4 +151,8 @@ async def process_city_task(
 
     document_count = len(resolved_entry.urbanization_documents) + len(resolved_entry.fee_documents)
     logger.info(f"{entry.municipality}: processed {document_count} document(s)")
+
+    if "database" in settings.load_targets and (new_entry := _without_processed(resolved_entry, processed_by_url)):
+        await persist_regulation_results_task([new_entry])
+
     return resolved_entry
