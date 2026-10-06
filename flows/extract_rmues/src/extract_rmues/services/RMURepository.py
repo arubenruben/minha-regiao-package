@@ -110,7 +110,7 @@ async def persist_regulation_results(
 
     Every document in `entries` is written: filtering out the ones already
     in the database (see `find_processed_documents`) is the caller's job --
-    see extract_rmues.ExtractRMUEs -- so each document reaches Postgres
+    see extract_rmues.tasks.ProcessCity -- so each document reaches Postgres
     exactly once.
     """
     async with connection(db_url):

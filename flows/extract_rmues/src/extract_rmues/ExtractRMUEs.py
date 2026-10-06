@@ -5,7 +5,7 @@ from prefect import flow, get_run_logger, unmapped
 from prefect.utilities.annotations import quote
 from tqdm import tqdm
 
-from extract_rmues.schema.RMUERegulation import RegulationDocument, RMUERegulation
+from extract_rmues.schema.RMUERegulation import RMUERegulation
 from extract_rmues.services.ConcurrencyLimiter import ensure_concurrency_limit
 from extract_rmues.services.OutputStore import OutputStore
 from extract_rmues.Settings import settings
@@ -13,30 +13,9 @@ from extract_rmues.tasks.ExtractNoticeText import EXTRACT_NOTICE_TEXT_TAG
 from extract_rmues.tasks.FetchRmuePage import fetch_rmue_page_task
 from extract_rmues.tasks.FindProcessedDocuments import find_processed_documents_task
 from extract_rmues.tasks.ParseRmuePage import parse_rmue_page_task
-from extract_rmues.tasks.PersistRegulationResults import persist_regulation_results_task
 from extract_rmues.tasks.ProcessCity import PROCESS_CITY_TAG, process_city_task
 from extract_rmues.tasks.ResolvePdfUrl import RESOLVE_PDF_URL_TAG
 from extract_rmues.tasks.WriteRmueJson import write_rmue_page_json_task
-
-
-def _without_processed(
-    entries: list[RMUERegulation], processed_by_url: dict[str, RegulationDocument]
-) -> list[RMUERegulation]:
-    """`entries` reduced to the documents not already in `processed_by_url`
-    -- the ones that still have to be written to the database -- dropping
-    any municipality left with none.
-    """
-    new_entries = [
-        RMUERegulation(
-            municipality=entry.municipality,
-            urbanization_documents=[
-                document for document in entry.urbanization_documents if document.dre_url not in processed_by_url
-            ],
-            fee_documents=[document for document in entry.fee_documents if document.dre_url not in processed_by_url],
-        )
-        for entry in entries
-    ]
-    return [entry for entry in new_entries if entry.urbanization_documents or entry.fee_documents]
 
 
 @flow(
@@ -59,9 +38,14 @@ async def extract_rmues(base_url: str) -> int:
     this very run, regardless of `settings.load_targets`: each municipality
     is mapped as a whole, and comes back with its complete set of
     documents, each already carrying its final pdf_url/status/raw_text/
-    structure. Only then are those entries written to the configured
-    sinks, in one call each -- so a document reaches the database exactly
-    once, already complete, never as a half-filled placeholder row.
+    structure. The database is written incrementally, by municipality: each
+    `process_city_task` persists its own city as its last step, once all of
+    its documents are final (see extract_rmues.tasks.ProcessCity) -- so a
+    document reaches the database exactly once, already complete, never as a
+    half-filled placeholder row, and an interrupted run keeps everything the
+    finished cities already produced. This flow only waits for the futures
+    and logs the summary, then writes the JSON target (a single file for
+    every city) when `"json"` is in `load_targets`.
 
     Idempotent and resumable, at the document level: `output_store`
     persists each document's PDF-resolution/text-extraction result --
@@ -76,7 +60,7 @@ async def extract_rmues(base_url: str) -> int:
     `output_store`, and a document found in either is reused. A document in
     `processed_by_url` is also not written back to the database (only the
     others are passed to the persist task), so each document reaches
-    Postgres exactly once. See extract_rmues.tasks.ProcessCity.
+    Postgres exactly once.
 
     Returns the number of documents whose PDF url was resolved.
     """
@@ -108,9 +92,6 @@ async def extract_rmues(base_url: str) -> int:
     documents = [document for entry in resolved for document in (*entry.urbanization_documents, *entry.fee_documents)]
     updated = sum(1 for document in documents if document.pdf_url is not None)
     logger.info(f"Resolved {updated}/{len(documents)} PDF urls in total")
-
-    if "database" in settings.load_targets:
-        await persist_regulation_results_task(_without_processed(resolved, processed_by_url))
 
     if "json" in settings.load_targets:
         await write_rmue_page_json_task(resolved)

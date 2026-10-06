@@ -8,7 +8,8 @@ República website, by city.
 extract_rmues/
   ExtractRMUEs.py          the flow: parse the RMUE page, fan out one task
                             run per municipality to resolve/extract its
-                            documents, then write the results
+                            documents (and persist them, see "Persistence"
+                            below), then write the JSON output
   Settings.py / .env       source URL, database, load_targets, concurrency
   schema/                  RMUERegulation, RMUEExtractionState
   services/
@@ -43,7 +44,8 @@ these are the same kind of raw DR gazette page range) — see
 and `structure` -- is recorded onto each document in `RMUERegulation` (see
 `schema/RMUERegulation.py`), and, when `database` is in `LOAD_TARGETS`,
 written to the matching `RMUE`/`FeeRegulation` row by
-`tasks/PersistRegulationResults.py` -- not just the JSON output.
+`tasks/PersistRegulationResults.py` (once per municipality, see "Persistence"
+below) -- not just the JSON output.
 
 An amending aviso quotes each article it changes and then republishes the
 consolidated regulation, so the same Artigo can come out of the parser twice.
@@ -76,7 +78,7 @@ Settings are pydantic-settings, loaded from `extract_rmues/.env` — copy
 | `PDF_EXTRACT_CONCURRENCY` | `8`                                                            | resolved PDFs downloaded and segmented to their own notice text in parallel across all municipalities |
 | `PDF_EXTRACT_TIMEOUT_SECONDS` | `60.0`                                                     | timeout for downloading a single PDF                                          |
 | `DATABASE_URL`     | `postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao`   | used when `database` is in `LOAD_TARGETS` (set `POSTGRES_PORT` at the repo root if 5432 is taken) |
-| `LOAD_TARGETS`     | `["json"]`                                                            | `database`, `json`, or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
+| `LOAD_TARGETS`     | `["json"]`                                                            | `database` (per municipality, as each finishes), `json` (once, at the end), or both — see [flows/CLAUDE.md](../../../CLAUDE.md) |
 | `OUTPUT_FILE`      | `extract_rmues/out/rmues.json`                                       | used when `json` is in `LOAD_TARGETS`             |
 | `STATE_FILE`       | `extract_rmues/out/rmue_state.json`                                  | `OutputStore`'s resumable checkpoint — see "Idempotence" below |
 
@@ -101,16 +103,38 @@ extracts their own notice text/structure, and returns the city's *complete*
 set of documents -- a document whose PDF url couldn't be resolved comes
 back with `status=pdf_url_not_found`.
 
-Nothing is written to the database while the cities are being processed.
-Once every municipality is done, one call writes the resolved entries to
-each sink in `load_targets`: with `database`, `tasks/PersistRegulationResults.py`
-upserts one `RMUE`/`FeeRegulation` row per document, keyed by
-`(city, dre_url)`, with its `year`/`name`/`is_complete` and its final
-`pdf_url`/`status`/`raw_text`/`structure` -- but only for the documents not
-already in the database (see "Idempotence"); with `json`, all the resolved
-entries go to `OUTPUT_FILE`. So a document reaches Postgres exactly once, already
-complete -- an interrupted run leaves no half-filled rows behind -- and the
-flow needs no database at all with the default `["json"]`. Municipalities
+## Persistence
+
+The database is written **incrementally, by municipality**, not once at the end
+of the run. The last step of `process_city_task` is persisting its own city:
+only once *all* of that city's `urbanization_documents` and `fee_documents` have
+reached their final state (and the city has been recorded in `OutputStore`) does
+it call `persist_regulation_results_task([entry])` (`tasks/PersistRegulationResults.py`)
+with just that city. With `database` in `LOAD_TARGETS`, that upserts one
+`RMUE`/`FeeRegulation` row per document, keyed by `(city, dre_url)`, with its
+`year`/`name`/`is_complete` and its final `pdf_url`/`status`/`raw_text`/`structure`.
+So a document reaches Postgres exactly once, already complete -- never
+part-way through its processing, and a run that fails or is interrupted midway
+keeps everything the cities already finished instead of losing hours of
+resolution/extraction work.
+
+- It only happens when `database` is in `LOAD_TARGETS`.
+- The entry passed has only the documents not already in `processed_by_url`
+  (see "Idempotence"), and the task isn't called at all when that leaves
+  nothing to write.
+- Several cities persist at the same time, from different threads;
+  `minha_regiao.database.DatabaseManager.connection` serialises their Tortoise
+  connections.
+- If a persist fails, that city's task run fails (and the flow with it), but the
+  city is already in `STATE_FILE`, and since its documents aren't in the
+  database they're written on the next run without being resolved or extracted
+  again.
+- The flow itself only waits for the task runs and logs how many PDF urls were
+  resolved; with `json` in `LOAD_TARGETS` it then writes all the resolved
+  entries to `OUTPUT_FILE` once at the end (a single file with every city, so it
+  can't be incremental).
+
+The flow needs no database at all with the default `["json"]`. Municipalities
 that don't match a `City`, and documents skipped because no year could be
 parsed from their name, are logged as warnings.
 
@@ -158,11 +182,11 @@ checked in this order:
 - The set of documents to process still comes from the freshly parsed listing
   page, and `process_city_task` still returns each city's complete document
   set (reused documents included), so the `json` target and `OutputStore`
-  always see everything. Only the persist step is narrower: the flow hands
-  `persist_regulation_results` just the documents that are **not** in
+  always see everything. Only the persist step is narrower: `process_city_task`
+  hands `persist_regulation_results_task` just the documents that are **not** in
   `processed_by_url` -- also when this run reused one from `OutputStore` --
   so each document is written to Postgres exactly once, on its first
-  complete run. A municipality with no new document is skipped there.
+  complete run. A municipality with no new document isn't persisted at all.
 - As a consequence, a row already persisted isn't refreshed by later runs.
   To retry a document that failed (or to re-extract it), remove its entry
   from `STATE_FILE` *and* delete its `RMUE`/`FeeRegulation` row (or, to

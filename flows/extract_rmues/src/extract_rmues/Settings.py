@@ -35,12 +35,14 @@ class Settings(BaseSettings):
 
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
-    # Which sinks the flow writes the enriched RMUE entries to. Defaults to
-    # json-only, so reproducing this flow never requires a database; opt
-    # into "database" explicitly. "database" also makes Postgres a source of
-    # idempotence: the documents already in it are read at the start of the
-    # run and not resolved/extracted (or written) again -- see
-    # extract_rmues.tasks.FindProcessedDocuments.
+    # Which sinks the flow writes the enriched RMUE entries to: "database"
+    # per municipality, as each one finishes (see
+    # extract_rmues.tasks.ProcessCity), "json" once at the end of the run.
+    # Defaults to json-only, so reproducing this flow never requires a
+    # database; opt into "database" explicitly. "database" also makes
+    # Postgres a source of idempotence: the documents already in it are read
+    # at the start of the run and not resolved/extracted (or written) again
+    # -- see extract_rmues.tasks.FindProcessedDocuments.
     load_targets: list[Literal["database", "json"]] = ["json"]
 
     # Where the enriched RMUE entries (with resolved pdf_url and extracted

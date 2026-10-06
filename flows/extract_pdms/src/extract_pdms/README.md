@@ -22,6 +22,10 @@ extract_pdms/
                                     RegulationDocument, keyed by url
                                     (find_processed_documents)
     ConcurrencyLimiter.py         registers the flow's tag-based concurrency limit
+  tasks/                        one @task per flow step; process_municipio is
+                                  mapped per municipality and, as its last
+                                  step, calls persist_pdms
+                                  (tasks/PersistPdms.py) for that municipality
   exception/                    typed exceptions for PDF url/page-action failures
   out/pdms.json                 default JSON output (see load_targets below)
   out/state.json                OutputStore's resumable checkpoint (separate from pdms.json)
@@ -67,7 +71,7 @@ Settings are pydantic-settings, loaded from `extract_pdms/.env` — copy
 | `OUTPUT_FILE`                    | `extract_pdms/out/pdms.json`                                 | used when `json` is in `LOAD_TARGETS`         |
 | `STATE_FILE`                     | `extract_pdms/out/state.json`                                | `OutputStore`'s resumable checkpoint           |
 | `DATABASE_URL`                   | `postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao` | used when `database` is in `LOAD_TARGETS` (set `POSTGRES_PORT` at the repo root if 5432 is taken) |
-| `LOAD_TARGETS`                   | `["json"]`                                                   | which sinks to write to — `database`, `json`, or both (see [flows/CLAUDE.md](../../../CLAUDE.md) for the `Loader` pattern) |
+| `LOAD_TARGETS`                   | `["json"]`                                                   | which sinks to write to — `database` (per municipality, as each finishes), `json` (once, at the end), or both (see [flows/CLAUDE.md](../../../CLAUDE.md) for the `Loader` pattern) |
 
 ## Running
 
@@ -77,6 +81,34 @@ uv run --package extract_pdms python -m extract_pdms.ExtractPDM
 # or, via the CLI (see cli/README.md):
 uv run --package minha_regiao_cli minha-regiao run extract-pdms
 ```
+
+## Persistence
+
+The database is written **incrementally, by municipality**, not once at the end
+of the run. `process_municipio_task` (`tasks/ProcessMunicipio.py`) has the
+persist as its last step: after `process_municipio(...)` has resolved the
+municipality's PDM(s) and every one of their documents has reached its final
+state (and the result has been recorded in `OutputStore`), it calls
+`persist_pdms_task(records, processed_by_url)` (`tasks/PersistPdms.py`) with
+just that municipality's records. So a run that fails or is interrupted midway,
+after hours of downloads and extraction, keeps everything the municipalities
+already finished — nothing is lost for want of a final write.
+
+- It only happens when `database` is in `LOAD_TARGETS`. A document is never
+  persisted part-way through its processing.
+- The task isn't called when there's nothing to write: the municipality has no
+  records, or every document of every record is already in `processed_by_url`.
+  (A record with no documents at all still counts as something to write: its
+  `PDM` row is.)
+- Several municipalities persist at the same time, from different threads;
+  `minha_regiao.database.DatabaseManager.connection` serialises their Tortoise
+  connections.
+- If a persist fails, that municipality's task run fails (and the flow with it),
+  but its results are already in `STATE_FILE`, and since its documents aren't in
+  the database they're written on the next run without being processed again.
+- The flow itself only waits for the task runs, logs a summary, and — with
+  `json` in `LOAD_TARGETS` — writes `OUTPUT_FILE` once at the end (a single file
+  with every municipality, so it can't be incremental).
 
 ## Idempotence
 
@@ -104,10 +136,10 @@ failure: it isn't attempted again. To retry one, remove its entry from
 `STATE_FILE` *and* delete its `PDMDocument` row (or, to retry everything, the
 whole `STATE_FILE` and the `pdm_document` rows).
 
-On the way out, a document that's in `processed_by_url` is **not** written
-again, even when this run reused it from `OutputStore`: each document reaches
-Postgres exactly once, on its first complete run. `persist_pdms` still
-upserts each city's `PDM` row (`title`/`identifier`/`source_url`/`pdf_url`),
+When a municipality is persisted (see "Persistence"), a document that's in
+`processed_by_url` is **not** written again, even when this run reused it from
+`OutputStore`: each document reaches Postgres exactly once, on its first
+complete run. `persist_pdms` still upserts each city's `PDM` row (`title`/`identifier`/`source_url`/`pdf_url`),
 computed over *all* of the record's documents, but only writes a `PDMDocument`
 row for the ones not already in `processed_by_url`. As a consequence, a row
 already persisted isn't refreshed by later runs — fixing one means deleting
