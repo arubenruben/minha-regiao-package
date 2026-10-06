@@ -14,11 +14,15 @@ async def persist_regulation_results_task(entries: list[RMUERegulation]) -> int:
 
     async def _persist(records: list[RMUERegulation]) -> int:
         nonlocal persisted_count
-        persisted, unmatched_cities = await persist_regulation_results(settings.database_url, records)
+        persisted, unmatched_cities, skipped_documents = await persist_regulation_results(
+            settings.database_url, records
+        )
 
-        logger.info(f"Persisted {persisted} document result(s) (pdf_url/status/raw_text/structure) to the database")
+        logger.info(f"Persisted {persisted} regulation document(s) to the database")
         if unmatched_cities:
             logger.warning(f"Unmatched municipalities: {sorted(unmatched_cities)}")
+        if skipped_documents:
+            logger.warning(f"Skipped documents (no parseable year): {sorted(skipped_documents)}")
 
         persisted_count = persisted
         return persisted

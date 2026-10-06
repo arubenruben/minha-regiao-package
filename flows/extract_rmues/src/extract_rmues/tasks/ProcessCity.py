@@ -2,7 +2,6 @@ from typing import cast
 
 from prefect import get_run_logger, task
 
-from extract_rmues.schema.PendingDocument import PendingDocument
 from extract_rmues.schema.RMUERegulation import (
     DocumentStatus,
     RegulationDocument,
@@ -19,24 +18,9 @@ from extract_rmues.tasks.ResolvePdfUrl import resolve_pdf_url_task
 PROCESS_CITY_TAG = "rmue-city-pipeline"
 
 
-def _merge_documents(
-    existing: list[RegulationDocument], updates: dict[str, RegulationDocument]
-) -> list[RegulationDocument]:
-    """Returns `existing` with any document also present in `updates`
-    replaced by its updated copy, plus any brand-new document in `updates`
-    appended -- so a run that only touches a subset of a city's documents
-    (e.g. only those still missing a PDF url in Postgres) doesn't drop the
-    rest of that city's already-recorded documents from the output.
-    """
-    merged = [updates.get(document.dre_url, document) for document in existing]
-    seen = {document.dre_url for document in existing}
-    merged.extend(document for dre_url, document in updates.items() if dre_url not in seen)
-    return merged
-
-
 async def _resolve_and_extract(
-    documents: list[PendingDocument], output_store: OutputStore
-) -> tuple[dict[str, RegulationDocument], list[PendingDocument]]:
+    documents: list[RegulationDocument], output_store: OutputStore
+) -> list[RegulationDocument]:
     """Resolves each document's PDF url and extracts its own notice
     text/structure, skipping any document already recorded in
     `output_store` -- idempotence here is per document (by dre_url),
@@ -45,9 +29,10 @@ async def _resolve_and_extract(
     failure-prone step worth not repeating on a re-run, regardless of
     whether it previously succeeded or failed.
 
-    Returns the resulting RegulationDocuments keyed by dre_url, alongside
-    every document's resolved PendingDocument (cached or freshly resolved)
-    so the caller can persist pdf_url back to Postgres.
+    Returns one RegulationDocument per entry in `documents`, in the same
+    order: the one recorded in `output_store` when there is one, otherwise
+    the freshly resolved/extracted result. A document whose PDF url
+    couldn't be resolved comes back with `status=PDF_URL_NOT_FOUND`.
     """
     already_processed = {
         document.dre_url: cached
@@ -56,89 +41,62 @@ async def _resolve_and_extract(
     }
     to_resolve = [document for document in documents if document.dre_url not in already_processed]
 
-    newly_resolved = (
-        cast("list[PendingDocument]", resolve_pdf_url_task.map(to_resolve).result()) if to_resolve else []
+    resolved = (
+        cast("list[RegulationDocument]", resolve_pdf_url_task.map(to_resolve).result()) if to_resolve else []
     )
-    resolved_by_url = {document.dre_url: document for document in newly_resolved}
+    resolved_by_url = {document.dre_url: document for document in resolved}
 
-    to_extract = [document for document in newly_resolved if document.pdf_url is not None]
+    to_extract = [document for document in resolved if document.pdf_url is not None]
     extracted = (
         cast("list[RegulationDocument]", extract_notice_text_task.map(to_extract).result()) if to_extract else []
     )
-    extracted_by_url = {regulation.dre_url: regulation for regulation in extracted}
+    extracted_by_url = {document.dre_url: document for document in extracted}
 
-    regulations_by_url: dict[str, RegulationDocument] = {}
-    resolved_documents: list[PendingDocument] = []
+    results: list[RegulationDocument] = []
 
     for document in documents:
         cached = already_processed.get(document.dre_url)
         if cached is not None:
-            regulations_by_url[document.dre_url] = cached
-            resolved_documents.append(document.model_copy(update={"pdf_url": cached.pdf_url}))
+            results.append(cached)
             continue
 
         resolved_document = resolved_by_url[document.dre_url]
-        resolved_documents.append(resolved_document)
-
         if resolved_document.pdf_url is None:
-            regulations_by_url[document.dre_url] = RegulationDocument(
-                name=document.name, dre_url=document.dre_url, status=DocumentStatus.PDF_URL_NOT_FOUND
-            )
+            results.append(resolved_document.model_copy(update={"status": DocumentStatus.PDF_URL_NOT_FOUND}))
         else:
-            regulations_by_url[document.dre_url] = extracted_by_url[document.dre_url]
+            results.append(extracted_by_url[document.dre_url])
 
-    return regulations_by_url, resolved_documents
+    return results
 
 
 @task(name="process_city", tags=[PROCESS_CITY_TAG], persist_result=False)
-async def process_city_task(
-    municipality: str,
-    documents: list[PendingDocument],
-    output_store: OutputStore,
-) -> list[PendingDocument]:
-    """One municipality's full pipeline: resolves each of its pending
-    documents' PDF urls, then extracts their own notice text and legal
-    structure -- mapped once per municipality (see
-    extract_rmues.ExtractRMUEs), so this municipality's resolution/
-    extraction runs concurrently with others in flight, each still capped
-    by its own tag-based concurrency limit (see
+async def process_city_task(entry: RMUERegulation, output_store: OutputStore) -> RMUERegulation:
+    """One municipality's full pipeline: resolves each of its documents'
+    PDF urls, then extracts their own notice text and legal structure --
+    mapped once per municipality (see extract_rmues.ExtractRMUEs), so this
+    municipality's resolution/extraction runs concurrently with others in
+    flight, each still capped by its own tag-based concurrency limit (see
     extract_rmues.tasks.ResolvePdfUrl.RESOLVE_PDF_URL_TAG and
     extract_rmues.tasks.ExtractNoticeText.EXTRACT_NOTICE_TEXT_TAG)
     independently of how many municipalities are processed at once.
 
-    `documents` is only this run's pending set (e.g. just the documents
-    still missing a PDF url in Postgres, not this city's full history), so
-    the resulting record is merged onto whatever `output_store` already
-    has for `municipality` -- see `_merge_documents` -- rather than
-    replacing it outright, then recorded (persisting it to disk
-    immediately -- see OutputStore.record) before returning.
-
-    Returns the resolved PendingDocuments (pdf_url filled in, whether newly
-    resolved or reused from `output_store`) so the caller can persist
-    pdf_url back to Postgres when `"database"` is in load_targets.
+    `entry` is this municipality's full document set as parsed off the
+    listing page in the current run (see
+    extract_rmues.tasks.ParseRmuePage), so the returned entry is already
+    this city's complete set of documents, each with its final
+    pdf_url/status/raw_text/structure -- there's nothing to merge with
+    what `output_store` already has for it. It's recorded there (persisting
+    it to disk immediately -- see OutputStore.record) before returning.
     """
     logger = get_run_logger()
 
-    regulations_by_url, resolved_documents = await _resolve_and_extract(documents, output_store)
-
-    urbanization_updates = {
-        document.dre_url: regulations_by_url[document.dre_url] for document in documents if document.table == "rmue"
-    }
-    fee_updates = {
-        document.dre_url: regulations_by_url[document.dre_url]
-        for document in documents
-        if document.table == "fee_regulation"
-    }
-
-    existing = output_store.get_entry(municipality)
-    entry = RMUERegulation(
-        municipality=municipality,
-        urbanization_documents=_merge_documents(
-            existing.urbanization_documents if existing else [], urbanization_updates
-        ),
-        fee_documents=_merge_documents(existing.fee_documents if existing else [], fee_updates),
+    resolved_entry = RMUERegulation(
+        municipality=entry.municipality,
+        urbanization_documents=await _resolve_and_extract(entry.urbanization_documents, output_store),
+        fee_documents=await _resolve_and_extract(entry.fee_documents, output_store),
     )
-    output_store.record(entry)
+    output_store.record(resolved_entry)
 
-    logger.info(f"{municipality}: processed {len(documents)} document(s)")
-    return resolved_documents
+    document_count = len(resolved_entry.urbanization_documents) + len(resolved_entry.fee_documents)
+    logger.info(f"{entry.municipality}: processed {document_count} document(s)")
+    return resolved_entry
