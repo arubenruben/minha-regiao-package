@@ -35,30 +35,24 @@ class Settings(BaseSettings):
 
     database_url: str = "postgres://minha_regiao:minha_regiao@localhost:5432/minha_regiao"
 
-    # Which sinks the flow writes the enriched RMUE entries to: "database"
-    # per municipality, as each one finishes (see
-    # extract_rmues.tasks.ProcessCity), "json" once at the end of the run.
-    # Defaults to json-only, so reproducing this flow never requires a
-    # database; opt into "database" explicitly. "database" also makes
-    # Postgres a source of idempotence: the documents already in it are read
-    # at the start of the run and not resolved/extracted (or written) again
-    # -- see extract_rmues.tasks.FindProcessedDocuments.
+    # Which sinks the flow writes the enriched RMUE entries to, both per
+    # municipality, as each one finishes (see extract_rmues.tasks.ProcessCity):
+    # "database" and "json". Defaults to json-only, so reproducing this flow
+    # never requires a database; opt into "database" explicitly. Each target
+    # is also a source of idempotence for its own mode: "json" reads
+    # output_file back, and "database" reads the documents already in
+    # Postgres at the start of the run (see
+    # extract_rmues.tasks.FindProcessedDocuments) -- either way, they aren't
+    # resolved/extracted (or written) again.
     load_targets: list[Literal["database", "json"]] = ["json"]
 
     # Where the enriched RMUE entries (with resolved pdf_url and extracted
-    # notice text/structure) are written as JSON. Only used when "json" is
-    # in load_targets.
+    # notice text/structure) are written as JSON, rewritten in full as each
+    # city finishes. Only used when "json" is in load_targets. Also the JSON
+    # mode's source of idempotence: it's read back at the start of the run,
+    # and the documents already in it (by dre_url) aren't re-resolved or
+    # re-downloaded -- see extract_rmues.services.OutputStore.
     output_file: Path = Path(__file__).with_name("out") / "rmues.json"
-
-    # OutputStore's resumable RMUEExtractionState, checkpointed per city as
-    # the run progresses -- always written, regardless of load_targets,
-    # since it's what makes a re-run skip documents already resolved/
-    # extracted (by dre_url) instead of reopening a browser and
-    # re-downloading their PDF. Deliberately separate from output_file:
-    # that path is overwritten with a plain JSON list (see JsonFileLoader)
-    # once the run finishes, which isn't the shape OutputStore reads back
-    # on resume.
-    state_file: Path = Path(__file__).with_name("out") / "rmue_state.json"
 
 
 settings = Settings()

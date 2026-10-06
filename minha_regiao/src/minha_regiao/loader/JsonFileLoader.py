@@ -1,5 +1,5 @@
+import asyncio
 import json
-import time
 from pathlib import Path
 from typing import Generic, TypeVar
 
@@ -12,16 +12,20 @@ RecordT = TypeVar("RecordT", bound=BaseModel)
 # write) raises PermissionError (WinError 5) even though the lock clears
 # within milliseconds. Retried with backoff rather than failing the run or
 # giving up the atomic write (which is what makes a crash mid-write safe).
-# Mirrors extract_pdms.services.OutputStore._write.
 _REPLACE_RETRY_DELAYS_SECONDS = (0.05, 0.1, 0.2, 0.4, 0.8)
 
 
 class JsonFileLoader(Generic[RecordT]):
     """Writes a batch of records to `path` as JSON, atomically (write to a
-    `.tmp` sibling, then `Path.replace()`). Unlike
-    `extract_pdms.services.OutputStore` -- which is an incremental,
-    per-document resume cache -- this loader is a final sink: every call to
-    `load()` overwrites the full file with the given batch.
+    `.tmp` sibling, then `Path.replace()`). Every call to `load()` overwrites
+    the full file with the given batch, so it can be used both as a final
+    sink and, called again with a growing batch, as an incremental one --
+    `extract_pdms.services.OutputStore` and
+    `extract_rmues.services.OutputStore` do the latter, rewriting the whole
+    file after every municipality.
+
+    The retry backoff awaits `asyncio.sleep`, so a locked file never blocks
+    the caller's event loop.
     """
 
     def __init__(self, path: Path) -> None:
@@ -44,4 +48,4 @@ class JsonFileLoader(Generic[RecordT]):
             except PermissionError:
                 if delay is None:
                     raise
-                time.sleep(delay)
+                await asyncio.sleep(delay)

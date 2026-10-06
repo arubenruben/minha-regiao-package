@@ -85,9 +85,10 @@ def _to_regulation_document(row: PDMDocument) -> RegulationDocument:
 async def find_processed_documents(db_url: str) -> dict[str, RegulationDocument]:
     """Reads every `PDMDocument` row back as a `RegulationDocument`, keyed by
     its url -- the database as a source of idempotence, for when the local
-    `OutputStore` state file isn't there (another machine, a fresh container,
-    a deleted file). A document found here is never downloaded/extracted
-    again, whatever its `status`, the same as one found in the `OutputStore`.
+    `OutputStore` JSON file isn't there (another machine, a fresh container,
+    a deleted file) or `"json"` isn't in `load_targets`. A document found here
+    is never downloaded/extracted again, whatever its `status`, the same as
+    one found in the `OutputStore`.
     """
     async with connection(db_url):
         rows = await PDMDocument.all()

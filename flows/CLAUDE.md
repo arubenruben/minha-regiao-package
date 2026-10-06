@@ -91,7 +91,12 @@ and their wiring into [`extract_pdms/src/extract_pdms/ExtractPDM.py`](extract_pd
      the entity-specific `update_or_create` mapping stays in that function.
    - `JsonFileLoader` writes `[r.model_dump(mode="json") for r in records]` to
      a `Path`, atomically (write-then-replace with retry-on-`PermissionError`,
-     the same mechanics proven in `extract_pdms.services.OutputStore`).
+     the retry awaiting `asyncio.sleep` so it never blocks the event loop).
+     `extract_pdms.services.OutputStore` and
+     `extract_rmues.services.OutputStore` build on it: each is both the JSON
+     sink (rewriting the whole output file after every municipality) and the
+     source of idempotence of the JSON mode (reading that same file back when
+     built), so no separate checkpoint file is needed.
    - `HuggingFaceLoader` wraps `datasets.Dataset.push_to_hub` — this is the
      canonical home for what used to be `extract_geo.services.DatasetPublisher`
      (kept as a re-export for backward compatibility).
@@ -138,6 +143,13 @@ and their wiring into [`extract_pdms/src/extract_pdms/ExtractPDM.py`](extract_pd
   build that shape once behind `"huggingface" in load_targets or "json" in
   load_targets`, then gate the publish call and the JSON write independently
   inside that block — don't build it twice.
+- A flow that writes incrementally, per fanned-out item (`extract_pdms`,
+  `extract_rmues`), dispatches its sinks from the per-item task as its last
+  steps instead of from the flow body: the database persist stays its own
+  nested task, and the JSON sink is `OutputStore.record` (an `OutputStore` is
+  only built, and passed to the tasks, when `"json"` is in `load_targets`;
+  otherwise it's `None` and callers skip it). There's no separate "write the
+  JSON at the end" task in those flows.
 - An unimplemented flow (see `parse_election_files`'s stub sub-flows) still
   gets the `load_targets` setting scaffolded on its `Settings.py` ahead of its
   parsing logic, so whoever implements it wires the output step onto

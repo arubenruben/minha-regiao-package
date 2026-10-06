@@ -42,18 +42,24 @@ async def process_municipio_task(
     municipio: str,
     tmp_dir: Path,
     pdf_download_timeout_seconds: float,
-    output_store: OutputStore,
+    output_store: OutputStore | None,
     processed_by_url: dict[str, RegulationDocument],
-) -> None:
-    """Resolves one municipality's PDM(s), extracts their regulation text,
-    records the result into `output_store` (persisting it to disk) and, as
-    the last step, writes it to the database when `"database"` is in
-    `load_targets`. `process_municipio` only returns once every one of the
-    municipality's documents has reached its final state, so the database
-    never sees a document half-processed; the persist is skipped when
-    there's nothing to write (see `_has_records_to_persist`). Several of
-    these task runs persist at the same time, from different threads --
+) -> list[PDMRecord]:
+    """Resolves one municipality's PDM(s), extracts their regulation text and
+    then, once the municipality is final, writes it to each configured
+    sink: the database when `"database"` is in `load_targets` and, as the
+    very last step, `output_store` -- the JSON output file, which is
+    rewritten with this municipality included (see `OutputStore.record`).
+    `process_municipio` only returns once every one of the municipality's
+    documents has reached its final state, so neither sink ever sees a
+    document half-processed; the database persist is skipped when there's
+    nothing to write (see `_has_records_to_persist`). Several of these task
+    runs persist at the same time, from different threads --
     `minha_regiao.database.DatabaseManager.connection` serialises them.
+    Recording last means a municipality only counts as processed for the
+    JSON mode once every other configured sink has it too: if the database
+    persist fails, the municipality isn't in the JSON file and is processed
+    again on the next run.
     Mapped once per municipality (see extract_pdms.ExtractPDM), each call
     opens its own AsyncStealthySession rather than sharing one: Prefect's
     task runner executes each mapped call on its own fresh event loop in
@@ -62,7 +68,10 @@ async def process_municipio_task(
     `output_store` is a live object shared (and internally locked) across
     every mapped call, so -- like the session below -- it's passed directly
     rather than through a cache-key-hashed parameter; that's safe here
-    because persist_result is off.
+    because persist_result is off. It's None when `"json"` isn't in
+    `load_targets` (see extract_pdms.ExtractPDM): the municipality's
+    documents are then only looked up in `processed_by_url`, and nothing is
+    recorded.
 
     `processed_by_url` is the documents already persisted in the database
     (see extract_pdms.ExtractPDM.find_processed_documents_task), the same
@@ -76,9 +85,12 @@ async def process_municipio_task(
             session, tmp_dir, municipio, pdf_download_timeout_seconds, output_store, processed_by_url
         )
 
-    output_store.record(municipio, records)
-
     if "database" in settings.load_targets and _has_records_to_persist(records, processed_by_url):
         # `quote`: same reason as in ExtractPDM -- skips Prefect walking
         # every document in `processed_by_url` again for this nested task run.
         await persist_pdms_task(records, quote(processed_by_url))
+
+    if output_store is not None:
+        await output_store.record(municipio, records)
+
+    return records

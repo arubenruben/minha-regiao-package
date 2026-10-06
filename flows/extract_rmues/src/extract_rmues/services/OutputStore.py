@@ -1,69 +1,51 @@
 import threading
-import time
 from pathlib import Path
 
-from extract_rmues.schema.RMUEExtractionState import RMUEExtractionState
+from minha_regiao.loader.JsonFileLoader import JsonFileLoader
+from pydantic import TypeAdapter
+
 from extract_rmues.schema.RMUERegulation import RegulationDocument, RMUERegulation
 
-# On Windows, replacing a file that's momentarily open elsewhere (an AV
-# scanner, a search indexer, or -- most likely here, since this runs under
-# a OneDrive-synced Desktop -- the OneDrive sync client noticing the write)
-# raises PermissionError (WinError 5) even though the lock clears within
-# milliseconds. Retried with backoff rather than failing the run or giving
-# up the atomic write (which is what makes a crash mid-write safe). Mirrors
-# extract_pdms.services.OutputStore.
-_REPLACE_RETRY_DELAYS_SECONDS = (0.05, 0.1, 0.2, 0.4, 0.8)
+_ENTRIES_ADAPTER = TypeAdapter(list[RMUERegulation])
 
 
 class OutputStore:
-    """Persists extract_rmues' progress to `path`, so a crashed or
-    interrupted run resumes from where it left off instead of repeating
-    the expensive, failure-prone step: resolving a document's PDF url and
-    extracting its own notice text/structure. Idempotence is tracked per
-    document (by dre_url) via `get_document`, mirroring
-    extract_pdms.services.OutputStore -- not per municipality, since a
-    municipality's own document set can grow across runs.
+    """The JSON sink for extract_rmues and, at the same time, the source of
+    idempotence of its JSON mode: `path` is the flow's output file -- a plain
+    list of `RMUERegulation`, the shape `JsonFileLoader` writes -- which is
+    read back when the store is built, so a crashed or interrupted run
+    resumes from where it left off instead of repeating the expensive,
+    failure-prone step: resolving a document's PDF url and extracting its
+    own notice text/structure. Idempotence is tracked per document (by
+    dre_url) via `get_document`, mirroring extract_pdms.services.OutputStore
+    -- not per municipality, since a municipality's own document set can
+    grow across runs.
 
     `record()` is the flow's critical section and its only mutator: it's
     called once per municipality, concurrently, from every mapped task run
-    (see extract_rmues.tasks.ProcessCity), so the read-modify-write of the
-    shared state and its persistence to disk are both guarded by `_lock`,
-    and the write itself is atomic (write-then-replace) so a crash
-    mid-write can't corrupt a previous run's progress.
+    (see extract_rmues.tasks.ProcessCity) -- each on its own thread and
+    event loop -- and rewrites the whole file via `JsonFileLoader`
+    (atomically, write-then-replace, so a crash mid-write can't corrupt a
+    previous run's progress). The upsert and that rewrite both happen under
+    `_lock`, held across the awaited write, so two municipalities finishing
+    at the same time can't write the file out of order. Holding a
+    `threading.Lock` across an `await` is only safe because no two callers
+    share an event loop: one blocked on the lock would otherwise stop the
+    loop its holder needs to resume on.
     """
 
     def __init__(self, path: Path) -> None:
-        self._path = path
+        self._loader = JsonFileLoader[RMUERegulation](path)
         self._lock = threading.Lock()
 
-        state = self._read()
-        self._records: dict[str, RMUERegulation] = {entry.municipality: entry for entry in state.entries}
+        entries = _ENTRIES_ADAPTER.validate_json(path.read_text(encoding="utf-8")) if path.exists() else []
+
+        self._records: dict[str, RMUERegulation] = {entry.municipality: entry for entry in entries}
         self._documents_by_url: dict[str, RegulationDocument] = {
             document.dre_url: document
-            for entry in state.entries
+            for entry in entries
             for document in (*entry.urbanization_documents, *entry.fee_documents)
         }
-
-    def _read(self) -> RMUEExtractionState:
-        if not self._path.exists():
-            return RMUEExtractionState()
-        return RMUEExtractionState.model_validate_json(self._path.read_text(encoding="utf-8"))
-
-    def _write(self) -> None:
-        state = RMUEExtractionState(entries=list(self._records.values()))
-
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = self._path.with_suffix(f"{self._path.suffix}.tmp")
-        tmp_path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
-
-        for delay in (*_REPLACE_RETRY_DELAYS_SECONDS, None):
-            try:
-                tmp_path.replace(self._path)
-                return
-            except PermissionError:
-                if delay is None:
-                    raise
-                time.sleep(delay)
 
     def get_document(self, dre_url: str) -> RegulationDocument | None:
         """Returns a previously recorded document by dre_url, if any --
@@ -72,19 +54,14 @@ class OutputStore:
         with self._lock:
             return self._documents_by_url.get(dre_url)
 
-    def record(self, entry: RMUERegulation) -> None:
+    async def record(self, entry: RMUERegulation) -> None:
         """Upserts `entry` -- keyed by municipality, so re-processing the
         same city replaces its previous entry rather than duplicating it --
-        and indexes its documents by dre_url, persisting the combined state
-        before returning.
+        indexes its documents by dre_url, and rewrites the output file with
+        every entry held so far before returning.
         """
         with self._lock:
             self._records[entry.municipality] = entry
             for document in (*entry.urbanization_documents, *entry.fee_documents):
                 self._documents_by_url[document.dre_url] = document
-            self._write()
-
-    @property
-    def records(self) -> list[RMUERegulation]:
-        with self._lock:
-            return list(self._records.values())
+            await self._loader.load(list(self._records.values()))

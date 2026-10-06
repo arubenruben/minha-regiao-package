@@ -14,7 +14,6 @@ from extract_pdms.services.ConcurrencyLimiter import ensure_concurrency_limit
 from extract_pdms.services.OutputStore import OutputStore
 from extract_pdms.services.PDMRepository import find_processed_documents
 from extract_pdms.Settings import settings
-from minha_regiao.loader.JsonFileLoader import JsonFileLoader
 from extract_pdms.tasks.ExtractPdfText import EXTRACT_PDF_TEXT_TAG
 from extract_pdms.tasks.FetchRegulationDocuments import FETCH_REGULATION_DOCUMENTS_TAG
 from extract_pdms.tasks.ProcessMunicipio import (
@@ -43,15 +42,6 @@ async def find_processed_documents_task() -> dict[str, RegulationDocument]:
     return processed_by_url
 
 
-@task(name="write_pdms_json")
-async def write_pdms_json_task(records: list[PDMRecord]) -> None:
-    logger = get_run_logger()
-
-    await JsonFileLoader[PDMRecord](settings.output_file).load(records)
-
-    logger.info(f"Wrote {len(records)} PDM record(s) to {settings.output_file}")
-
-
 @flow(
     name="extract_pdms",
     description=(
@@ -71,34 +61,39 @@ async def extract_pdms() -> list[PDMRecord]:
 
     Idempotent and resumable, at the document level: search and fetch
     always re-run for every municipality (they're cheap SNIT metadata
-    lookups), but `output_store` persists each regulation document's
-    download/text-extraction result -- via its own locked critical
-    section, see OutputStore.record -- to `settings.state_file` as soon
-    as it's produced, and a document already recorded there (regardless of
-    whether it succeeded) is reused on the next run instead of being
-    downloaded and parsed again. When `"database"` is in `load_targets` the
-    database is a second source of idempotence, for when that state file is
-    missing: `processed_by_url` -- every `PDMDocument` already in Postgres,
-    read once at the start of the run -- is consulted after `output_store`,
-    and a document found in either is reused. A document in
-    `processed_by_url` is also not written back to the database (see
+    lookups), but each regulation document's download/text-extraction result
+    is kept, and a document already kept (regardless of whether it
+    succeeded) is reused on the next run instead of being downloaded and
+    parsed again. When `"json"` is in `load_targets`, `output_store` is that
+    JSON sink and a source of idempotence at once: it reads
+    `settings.output_file` when built, and each `process_municipio_task`
+    rewrites the file with its municipality as its last step -- via its own
+    locked critical section, see OutputStore.record -- so the output file is
+    always up to date and a resumed run picks up from it. When `"database"` is
+    in `load_targets` the database is a second source of idempotence:
+    `processed_by_url` -- every `PDMDocument` already in Postgres, read once
+    at the start of the run -- is consulted after `output_store`, and a
+    document found in either is reused. A document in `processed_by_url` is
+    also not written back to the database (see
     extract_pdms.services.PDMRepository.persist_pdms), so each document
-    reaches Postgres exactly once. See
+    reaches Postgres exactly once. Without `"json"` in `load_targets` there's
+    no `output_store` (it's None) and the database is the only source. See
     extract_pdms.services.MunicipioPipeline._extract_documents.
 
-    The database is written incrementally, by municipality: each
+    Both sinks are written incrementally, by municipality: each
     `process_municipio_task` persists its own records (see
-    extract_pdms.tasks.PersistPdms) as its last step, once all of its
-    documents are final, so an interrupted run keeps everything the
-    finished municipalities already produced. This flow only waits for the
-    futures and logs the summary, then writes the JSON target (a single file
-    for every municipality) when `"json"` is in `load_targets`.
+    extract_pdms.tasks.PersistPdms) and records them in `output_store` as its
+    last steps, once all of its documents are final, so an interrupted run
+    keeps everything the finished municipalities already produced. This flow
+    only waits for the futures and logs the summary.
+
+    Returns the PDM records resolved in this run.
     """
     logger = get_run_logger()
 
     processed_by_url = await find_processed_documents_task()
 
-    output_store = OutputStore(settings.state_file)
+    output_store = OutputStore(settings.output_file) if "json" in settings.load_targets else None
 
     municipalities = SnitSearch.load_municipalities()
 
@@ -110,6 +105,8 @@ async def extract_pdms() -> list[PDMRecord]:
     await ensure_concurrency_limit(
         EXTRACT_PDF_TEXT_TAG, settings.pdf_download_concurrency
     )
+
+    pdm_records: list[PDMRecord] = []
 
     with tempfile.TemporaryDirectory(prefix="extract_pdms_") as tmp_dir_name:
         tmp_dir = Path(tmp_dir_name)
@@ -129,19 +126,14 @@ async def extract_pdms() -> list[PDMRecord]:
             total=len(municipalities), desc="Processing municipalities", unit="city"
         ) as progress:
             for future in futures:
-                cast("None", future.result())
+                pdm_records.extend(cast("list[PDMRecord]", future.result()))
                 progress.update(1)
-
-    pdm_records = output_store.records
 
     document_count = sum(len(record.documents) for record in pdm_records)
     logger.info(
         f"Processed {len(municipalities)} municipalities: "
         f"{len(pdm_records)} PDM record(s), {document_count} regulation document(s)"
     )
-
-    if "json" in settings.load_targets:
-        await write_pdms_json_task(pdm_records)
 
     return pdm_records
 
